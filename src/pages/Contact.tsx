@@ -32,6 +32,9 @@ const Contact = () => {
                 Instagram
               </a>
             </div>
+            <p className="font-serif text-base md:text-lg text-foreground/30 italic mt-16">
+              Collaborations emerge through dialogue, not applications.
+            </p>
           </motion.div>
         </div>
       </section>

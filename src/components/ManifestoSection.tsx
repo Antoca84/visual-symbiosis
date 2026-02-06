@@ -26,6 +26,15 @@ const ManifestoSection = () => {
             </p>
           </div>
         </ScrollReveal>
+        <ScrollReveal delay={0.4}>
+          <div className="md:ml-[20%] lg:ml-[25%] max-w-2xl mt-10 md:mt-14">
+            <p className="font-serif text-xl md:text-2xl lg:text-[1.75rem] leading-[1.5] text-foreground/40 italic">
+              Alongside illustration, the studio actively employs cinematic 3D
+              and VFX techniques — including volumetric rendering, lighting, and
+              visual effects — when they serve the scientific narrative.
+            </p>
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   );
