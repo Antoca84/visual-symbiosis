@@ -16,7 +16,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename="/visual-symbiosis">
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/project/:slug" element={<ProjectPage />} />
