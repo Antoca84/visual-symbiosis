@@ -36,6 +36,15 @@ const HeroSection = () => {
           <br />
           Magic
         </motion.h1>
+        <motion.p
+          className="mt-6 text-[11px] tracking-[0.3em] uppercase text-muted-foreground"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 2.4, ease: "easeOut" }}
+        >
+          A visual laboratory at the intersection of biology, graphic-novel
+          language, and cinematic VFX.
+        </motion.p>
       </div>
     </section>
   );

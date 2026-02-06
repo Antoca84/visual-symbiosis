@@ -17,6 +17,10 @@ const SelectedWork = () => {
         <p className="text-[11px] tracking-[0.3em] uppercase text-muted-foreground">
           Selected Work
         </p>
+        <p className="font-serif text-base md:text-lg text-foreground/30 italic mt-6 max-w-xl">
+          Projects may combine illustration, 3D rendering, and cinematic VFX
+          depending on the nature of the scientific question.
+        </p>
       </ScrollReveal>
 
       {projects.map((project, index) => (

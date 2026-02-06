@@ -34,6 +34,11 @@ const About = () => {
                   automated; felt, not merely understood.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
+                  The practice includes both illustrated and fully 3D
+                  VFX-driven workflows, borrowing tools from cinematic visual
+                  effects when interpretation demands it.
+                </p>
+                <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
                   Every image is a position. Every project is a question asked in
                   form rather than language.
                 </p>
