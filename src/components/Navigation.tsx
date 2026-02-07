@@ -51,7 +51,7 @@ const Navigation = () => {
               "text-[11px] tracking-[0.25em] uppercase transition-opacity duration-300",
               location.pathname === link.to
                 ? "text-foreground opacity-100"
-                : "text-muted-foreground opacity-70 hover:opacity-100"
+                : "text-muted-foreground opacity-80 hover:opacity-100"
             )}
           >
             {link.label}
