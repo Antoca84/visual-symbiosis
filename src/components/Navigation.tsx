@@ -1,12 +1,23 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 
 const Navigation = () => {
   const [hidden, setHidden] = useState(false);
   const [lastY, setLastY] = useState(0);
   const location = useLocation();
+
+  // Track scroll progress for cinematic reveal
+  const { scrollY } = useScroll();
+  
+  // Cinematic reveal parameters for logo text
+  // Start submerged: low opacity, subtle blur, reduced brightness/contrast
+  // End emerged: full opacity, sharp focus, full brightness/contrast
+  const logoOpacity = useTransform(scrollY, [0, 300], [0.35, 1]);
+  const logoBlur = useTransform(scrollY, [0, 300], [4, 0]);
+  const logoBrightness = useTransform(scrollY, [0, 300], [0.7, 1]);
+  const logoContrast = useTransform(scrollY, [0, 300], [0.75, 1]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -40,7 +51,18 @@ const Navigation = () => {
         to="/"
         className="font-serif text-xl md:text-2xl tracking-[0.15em] text-foreground uppercase"
       >
-        Industrial Magic
+        <motion.span
+          style={{
+            opacity: logoOpacity,
+            filter: useTransform(
+              [logoBlur, logoBrightness, logoContrast],
+              ([blur, brightness, contrast]) => 
+                `blur(${blur}px) brightness(${brightness}) contrast(${contrast})`
+            ),
+          }}
+        >
+          Industrial Magic
+        </motion.span>
       </Link>
       <nav className="flex items-center gap-6 md:gap-10">
         {links.map((link) => (
