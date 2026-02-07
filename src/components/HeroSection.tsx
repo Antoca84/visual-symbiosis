@@ -11,13 +11,14 @@ const HeroSection = () => {
     offset: ["start start", "end start"]
   });
 
-  // Cinematic reveal parameters
-  // Start submerged: low opacity, heavy blur, reduced contrast
-  // End emerged: full opacity, sharp focus, full contrast
-  const textOpacity = useTransform(scrollYProgress, [0, 0.5], [0.3, 1]);
-  const textBlur = useTransform(scrollYProgress, [0, 0.5], [8, 0]);
-  const textBrightness = useTransform(scrollYProgress, [0, 0.5], [0.6, 1]);
-  const textContrast = useTransform(scrollYProgress, [0, 0.5], [0.7, 1]);
+  // Subtle cinematic focus-based reveal
+  // Perceived rather than noticed — optical depth, not motion
+  // Start: partially submerged in darkness, slightly out of focus
+  // End: full clarity through smooth focus pull and contrast adjustment
+  const textOpacity = useTransform(scrollYProgress, [0, 0.4], [0.4, 1]);
+  const textBlur = useTransform(scrollYProgress, [0, 0.4], [6, 0]);
+  const textBrightness = useTransform(scrollYProgress, [0, 0.4], [0.65, 1]);
+  const textContrast = useTransform(scrollYProgress, [0, 0.4], [0.75, 1]);
 
   return (
     <section 
@@ -40,7 +41,7 @@ const HeroSection = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
       </motion.div>
 
-      {/* Studio name with cinematic scroll-based reveal */}
+      {/* Studio name with subtle cinematic focus-based reveal */}
       <div className="relative z-10 px-6 md:px-12 w-full">
         <motion.h1
           className="font-serif text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem] leading-[0.85] tracking-[0.04em] text-foreground"
