@@ -25,12 +25,12 @@ export const projects: Project[] = [
     title: "The Architecture of Division",
     subtitle: "Cell mitosis as structural drama",
     coverImage: coverDivision,
-    coverAspect: "16/9",
+    coverAspect: "3/4",
     images: [
       {
         src: coverDivision,
         alt: "Cell division interpreted as architectural form",
-        aspect: "16/9",
+        aspect: "3/4",
       },
     ],
     texts: [
