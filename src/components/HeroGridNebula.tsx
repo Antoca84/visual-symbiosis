@@ -131,7 +131,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       // ── Clear ────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.22 : 0.11})`;
+      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.13 : 0.11})`;
       ctx.fillRect(0, 0, W, H);
 
       const { x: mX, y: mY } = mouseRef.current;
@@ -281,8 +281,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             bl = Math.round(COLD_BLUE[2] + (tC[2] - COLD_BLUE[2]) * f);
           }
           const disp  = Math.abs(avgDz);
-          const alpha = Math.min(0.85, 0.055 + disp * 2.2);
-          const lw    = Math.min(2.6, 0.35 + disp * 5.2);
+          const alpha = Math.min(0.90, 0.20 + disp * 2.6);
+          const lw    = Math.min(3.0, 0.65 + disp * 5.5);
           ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
           ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
           ctx.lineWidth = lw; ctx.stroke();
@@ -314,7 +314,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       ctx.globalCompositeOperation = "source-over";
 
       // Bottom dissolve into page
-      const gd = ctx.createLinearGradient(0, H * 0.50, 0, H);
+      const gd = ctx.createLinearGradient(0, H * 0.65, 0, H);
       gd.addColorStop(0, "rgba(0,0,0,0)");
       gd.addColorStop(1, `rgba(${BG[0]},${BG[1]},${BG[2]},1)`);
       ctx.fillStyle = gd; ctx.fillRect(0, 0, W, H);
@@ -322,7 +322,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // Edge vignette — clips oversized grid cleanly
       const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.18, W / 2, H / 2, W * 0.82);
       vig.addColorStop(0, "rgba(0,0,0,0)");
-      vig.addColorStop(1, `rgba(${BG[0]},${BG[1]},${BG[2]},0.90)`);
+      vig.addColorStop(1, `rgba(${BG[0]},${BG[1]},${BG[2]},0.72)`);
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
     }
 

@@ -11,14 +11,8 @@ const HeroSection = () => {
     offset: ["start start", "end start"]
   });
 
-  // Subtle cinematic focus-based reveal
-  // Perceived rather than noticed — optical depth, not motion
-  // Start: partially submerged in darkness, slightly out of focus
-  // End: full clarity through smooth focus pull and contrast adjustment
-  const textOpacity = useTransform(scrollYProgress, [0, 0.4], [0.4, 1]);
-  const textBlur = useTransform(scrollYProgress, [0, 0.4], [6, 0]);
-  const textBrightness = useTransform(scrollYProgress, [0, 0.4], [0.65, 1]);
-  const textContrast = useTransform(scrollYProgress, [0, 0.4], [0.75, 1]);
+  // Title fades out as user scrolls past hero
+  const textOpacity = useTransform(scrollYProgress, [0.45, 0.85], [1, 0]);
 
   return (
     <section 
@@ -39,14 +33,7 @@ const HeroSection = () => {
             delay: 1.6,
             ease: [0.25, 0.1, 0.25, 1],
           }}
-          style={{
-            opacity: textOpacity,
-            filter: useTransform(
-              [textBlur, textBrightness, textContrast],
-              ([blur, brightness, contrast]) => 
-                `blur(${blur}px) brightness(${brightness}) contrast(${contrast})`
-            ),
-          }}
+          style={{ opacity: textOpacity }}
         >
           Industrial
           <br />
