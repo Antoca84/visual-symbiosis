@@ -11,29 +11,28 @@ const ManifestoSection = () => {
               <br />
               We do not generate shortcuts.
               <br />
-              We do not settle for good enough.
+              Every frame is a decision.
             </p>
           </div>
         </ScrollReveal>
         <ScrollReveal delay={0.2}>
           <div className="md:ml-[20%] lg:ml-[25%] max-w-2xl mt-10 md:mt-14">
             <p className="font-serif text-2xl md:text-3xl lg:text-[2.5rem] leading-[1.4] text-foreground/70 italic">
-              We build visual worlds —{" "}
+              We build visual worlds — in VFX, CGI, and three dimensions —{" "}
               <br className="hidden md:block" />
-              in VFX, CGI, three dimensions —{" "}
+              for cinema, science, and anything{" "}
               <br className="hidden md:block" />
-              where craft is not a luxury.{" "}
-              <br className="hidden md:block" />
-              It is the standard.
+              that needs to exist before it exists.
             </p>
           </div>
         </ScrollReveal>
         <ScrollReveal delay={0.4}>
           <div className="md:ml-[20%] lg:ml-[25%] max-w-2xl mt-10 md:mt-14">
             <p className="font-serif text-xl md:text-2xl lg:text-[1.75rem] leading-[1.5] text-foreground/40 italic">
-              Between cinema and science, between light and structure —
-              we operate. Not to document. Not to simulate.
-              To author.
+              Directors who need a shot that doesn't exist yet.
+              Researchers whose data needs to become something people can actually see.
+              Brands that refuse to look like everyone else.
+              That is who we work with.
             </p>
           </div>
         </ScrollReveal>

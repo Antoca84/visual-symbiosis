@@ -24,24 +24,28 @@ const About = () => {
             <ScrollReveal>
               <div className="space-y-8">
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
-                  Industrial Magic is a visual studio at the intersection of
-                  VFX, CGI, 3D, cinema, and scientific visualization.
-                  We build extraordinary visual worlds — with the precision
-                  of engineering and the intention of art.
+                  Industrial Magic is a VFX, CGI, and 3D studio. We create
+                  visual content for cinema, commercial production, and
+                  scientific communication — from fully rendered environments
+                  to product visualization to phenomena made visible
+                  for the first time.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  We do not automate craft. We do not render by default.
-                  Every image is authored — felt, not merely processed.
+                  We work with directors who need a shot that doesn't exist yet.
+                  With researchers who need their data to become something
+                  people can actually see. With brands who need a visual
+                  identity that doesn't look like everyone else's.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  The studio works across cinematic VFX pipelines, fully 3D
-                  workflows, and scientific visualization — treating each domain
-                  not as a deliverable, but as a question asked in light,
-                  volume, and time.
+                  Every project — regardless of scale — gets the same level
+                  of craft. We work across cinematic VFX pipelines, 3D
+                  workflows, and scientific visualization. We don't have
+                  a good enough mode.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  Exceptional quality is not a privilege reserved for
-                  exceptional budgets. That is exactly what we are here to prove.
+                  High-end visual production has historically required
+                  high-end budgets. We built this studio to challenge that.
+                  The craft stays. The ceiling moves.
                 </p>
               </div>
             </ScrollReveal>
