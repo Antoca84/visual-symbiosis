@@ -6,10 +6,10 @@ const ClosingLine = () => {
       <ScrollReveal>
         <div className="max-w-screen-xl mx-auto">
           <p className="font-serif text-3xl md:text-5xl lg:text-6xl text-foreground/60 italic leading-[1.3]">
-            This is not how science is usually shown.
+            Exceptional is not a budget.
             <br />
             <span className="text-foreground/30">
-              That is exactly the point.
+              It is a decision.
             </span>
           </p>
         </div>

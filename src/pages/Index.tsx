@@ -1,7 +1,8 @@
 import Navigation from "@/components/Navigation";
 import HeroSection from "@/components/HeroSection";
 import ManifestoSection from "@/components/ManifestoSection";
-import SelectedWork from "@/components/SelectedWork";
+import VisualBreak from "@/components/VisualBreak";
+import DisciplinesSection from "@/components/DisciplinesSection";
 import ClosingLine from "@/components/ClosingLine";
 
 const Index = () => {
@@ -10,7 +11,8 @@ const Index = () => {
       <Navigation />
       <HeroSection />
       <ManifestoSection />
-      <SelectedWork />
+      <VisualBreak />
+      <DisciplinesSection />
       <ClosingLine />
     </main>
   );

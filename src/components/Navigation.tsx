@@ -25,7 +25,6 @@ const Navigation = () => {
   }, [location]);
 
   const links = [
-    { to: "/", label: "Work" },
     { to: "/about", label: "About" },
     { to: "/contact", label: "Contact" },
   ];

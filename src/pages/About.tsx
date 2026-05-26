@@ -24,23 +24,24 @@ const About = () => {
             <ScrollReveal>
               <div className="space-y-8">
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
-                  Industrial Magic is a visual laboratory operating at the
-                  intersection of biology, graphic-novel language, and conceptual
-                  scientific art.
+                  Industrial Magic is a visual studio at the intersection of
+                  VFX, CGI, 3D, cinema, and scientific visualization.
+                  We build extraordinary visual worlds — with the precision
+                  of engineering and the intention of art.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  We do not explain. We interpret. Our work exists to give
-                  scientific phenomena a visual voice — one that is authored, not
-                  automated; felt, not merely understood.
+                  We do not automate craft. We do not render by default.
+                  Every image is authored — felt, not merely processed.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  The practice includes both illustrated and fully 3D
-                  VFX-driven workflows, borrowing tools from cinematic visual
-                  effects when interpretation demands it.
+                  The studio works across cinematic VFX pipelines, fully 3D
+                  workflows, and scientific visualization — treating each domain
+                  not as a deliverable, but as a question asked in light,
+                  volume, and time.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  Every image is a position. Every project is a question asked in
-                  form rather than language.
+                  Exceptional quality is not a privilege reserved for
+                  exceptional budgets. That is exactly what we are here to prove.
                 </p>
               </div>
             </ScrollReveal>

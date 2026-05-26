@@ -1,6 +1,6 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import heroImage from "@/assets/hero-biology.jpg";
+import { HeroGridNebula } from "@/components/HeroGridNebula";
 
 const HeroSection = () => {
   const sectionRef = useRef<HTMLElement>(null);
@@ -25,21 +25,8 @@ const HeroSection = () => {
       ref={sectionRef}
       className="relative h-screen w-full overflow-hidden flex items-end pb-16 md:pb-24"
     >
-      {/* Background image with slow reveal */}
-      <motion.div
-        className="absolute inset-0"
-        initial={{ scale: 1.15, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 2.8, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <img
-          src={heroImage}
-          alt="Biological visual interpretation — Industrial Magic"
-          className="w-full h-full object-cover"
-          loading="eager"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
-      </motion.div>
+      {/* Nebula → grid assembly canvas */}
+      <HeroGridNebula scrollYProgress={scrollYProgress} />
 
       {/* Studio name with subtle cinematic focus-based reveal */}
       <div className="relative z-10 px-6 md:px-12 w-full">
@@ -71,8 +58,8 @@ const HeroSection = () => {
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 2.4, ease: "easeOut" }}
         >
-          A visual laboratory at the intersection of biology, graphic-novel
-          language, and cinematic VFX.
+          VFX, CGI, and 3D at the intersection of technical precision
+          and artistic vision. We make the extraordinary, for everyone.
         </motion.p>
       </div>
     </section>

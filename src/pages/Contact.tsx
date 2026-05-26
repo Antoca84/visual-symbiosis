@@ -17,21 +17,11 @@ const Contact = () => {
               Contact
             </p>
             <a
-              href="mailto:studio@industrialmagic.com"
+              href="mailto:hello@industrialmagic.it"
               className="font-serif text-3xl md:text-5xl lg:text-6xl text-foreground/80 italic hover:text-foreground transition-colors duration-500 inline-block"
             >
-              studio@industrialmagic.com
+              hello@industrialmagic.it
             </a>
-            <div className="mt-12">
-              <a
-                href="https://instagram.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] tracking-[0.25em] uppercase text-muted-foreground hover:text-foreground transition-opacity duration-300"
-              >
-                Instagram
-              </a>
-            </div>
             <p className="font-serif text-base md:text-lg text-foreground/30 italic mt-16">
               Collaborations emerge through dialogue, not applications.
             </p>
