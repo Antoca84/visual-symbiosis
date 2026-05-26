@@ -103,8 +103,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
-    // Water offscreen buffer (low-res, scaled up by drawImage for free bilinear blur)
-    const WW = 120, WH = 68;
+    // Water offscreen buffer (scaled up by drawImage with high-quality smoothing)
+    const WW = 240, WH = 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
     const wCtx = wCanvas.getContext("2d")!;
@@ -158,9 +158,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       }
       wCtx.putImageData(wd, 0, 0);
       ctx.globalCompositeOperation = "source-over";
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.globalAlpha = alpha;
       ctx.drawImage(wc, 0, 0, W, H);
       ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = false;
     }
 
     function draw(ts: number) {
