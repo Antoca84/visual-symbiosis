@@ -4,27 +4,27 @@ import { motion, useInView } from "framer-motion";
 const disciplines = [
   {
     number: "01",
-    title: "VFX & Visual Effects",
+    title: "Visual Effects",
     description:
-      "We bend reality with surgical precision. Every frame is authored, not generated. Not simulation — intention.",
+      "Live-action integration, compositing, shot enhancement. We make the impossible look like it was always there.",
   },
   {
     number: "02",
-    title: "CGI & 3D",
+    title: "3D & Rendering",
     description:
-      "Structure, light, volume. Every surface a decision. Every shadow earned.",
+      "Modeling, shading, lighting, animation. Fully CG environments and objects built to exist in any world.",
   },
   {
     number: "03",
     title: "Scientific Visualization",
     description:
-      "Phenomena beyond the visible — given form, weight, and dramatic consequence. Science as visual drama.",
+      "Phenomena that cannot be filmed — given form, scale, and clarity. Research made visible for the first time.",
   },
   {
     number: "04",
-    title: "Cinema & Motion",
+    title: "Motion & Narrative",
     description:
-      "Time as medium. Movement as argument. Pacing as meaning.",
+      "Direction, pacing, color, sound. The craft of making images move with intention, not just movement.",
   },
 ];
 
