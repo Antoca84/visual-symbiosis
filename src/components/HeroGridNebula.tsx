@@ -131,23 +131,23 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         for (let px = 0; px < dW; px++) {
           const nx = px / dW * 3.2;
           const ny = py / dH * 1.8;
-          // Two slow FBM layers at different scales/speeds
-          const w1 = fbm2(nx + t * 0.020, ny + 0.5 + t * 0.014, 3);
-          const w2 = fbm2(nx * 0.55 + 4.1 - t * 0.013, ny * 0.75 + 2.3 + t * 0.017, 3);
-          // Rare caustic shimmer
-          const shimmer = Math.max(0, vnoise2(nx * 2.1 + t * 0.038, ny * 2.3 + 6.1 - t * 0.028) - 0.74) * 3.2;
-          const h = Math.max(0, Math.min(1, w1 * 0.58 + w2 * 0.42));
+          // Two FBM layers — slow drift, perceptibly moving
+          const w1 = fbm2(nx + t * 0.055, ny + 0.5 + t * 0.038, 4);
+          const w2 = fbm2(nx * 0.55 + 4.1 - t * 0.041, ny * 0.75 + 2.3 + t * 0.049, 4);
+          // Caustic shimmer — more frequent than before
+          const shimmer = Math.max(0, vnoise2(nx * 2.1 + t * 0.09, ny * 2.3 + 6.1 - t * 0.07) - 0.62) * 2.8;
+          const h = Math.max(0, Math.min(1, w1 * 0.55 + w2 * 0.45));
           let r, g, b;
           if (h < 0.5) {
             const f = h * 2;
-            r = Math.round(6  + 20 * f);
-            g = Math.round(14 + 42 * f);
-            b = Math.round(28 + 66 * f);
+            r = Math.round(8  + 32 * f);
+            g = Math.round(22 + 68 * f);
+            b = Math.round(55 + 90 * f);
           } else {
             const f = (h - 0.5) * 2;
-            r = Math.round(26 + 20 * f + shimmer * 45);
-            g = Math.round(56 + 52 * f + shimmer * 65);
-            b = Math.round(94 + 60 * f + shimmer * 55);
+            r = Math.round(40  + 30 * f + shimmer * 60);
+            g = Math.round(90  + 70 * f + shimmer * 80);
+            b = Math.round(145 + 65 * f + shimmer * 60);
           }
           const idx = (py * dW + px) * 4;
           d[idx]   = Math.min(255, r);
@@ -181,11 +181,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       // ── Clear ────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.13 : 0.11})`;
+      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.92 : 0.11})`;
       ctx.fillRect(0, 0, W, H);
 
       // ── Water background (fades in during converge, full during grid) ─────────
-      const waterAlpha = phase === "float" ? 0 : phase === "converge" ? phaseT * 0.30 : 0.30;
+      const waterAlpha = phase === "float" ? 0 : phase === "converge" ? phaseT * 0.55 : 0.55;
       drawWater(t, waterAlpha);
 
       const { x: mX, y: mY } = mouseRef.current;
