@@ -82,6 +82,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
   const tRef       = useRef(0);
   const nodesRef   = useRef<Node[]>(makeNodes());
   const startRef   = useRef<number | null>(null);
+  const waterRef   = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; data: ImageData } | null>(null);
 
   useEffect(() => scrollYProgress.on("change", v => { scrollRef.current = v; }), [scrollYProgress]);
 
@@ -102,6 +103,13 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
+    // Water offscreen buffer (low-res, scaled up by drawImage for free bilinear blur)
+    const WW = 120, WH = 68;
+    const wCanvas = document.createElement("canvas");
+    wCanvas.width = WW; wCanvas.height = WH;
+    const wCtx = wCanvas.getContext("2d")!;
+    waterRef.current = { canvas: wCanvas, ctx: wCtx, data: wCtx.createImageData(WW, WH) };
+
     // Projection cache (avoid alloc per frame)
     type ProjResult = { sx: number; sy: number; s: number } | null;
     const projCache: ProjResult[] = new Array(N_NODES).fill(null);
@@ -111,6 +119,48 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       if (dz < 0.01) return null;
       const s = FL / dz;
       return { sx: W * 0.5 + wx * s, sy: H * 0.46 - wy * s, s };
+    }
+
+    function drawWater(t: number, alpha: number) {
+      const wr = waterRef.current;
+      if (!wr || alpha <= 0.01) return;
+      const { canvas: wc, ctx: wCtx, data: wd } = wr;
+      const dW = wc.width, dH = wc.height;
+      const d = wd.data;
+      for (let py = 0; py < dH; py++) {
+        for (let px = 0; px < dW; px++) {
+          const nx = px / dW * 3.2;
+          const ny = py / dH * 1.8;
+          // Two slow FBM layers at different scales/speeds
+          const w1 = fbm2(nx + t * 0.020, ny + 0.5 + t * 0.014, 3);
+          const w2 = fbm2(nx * 0.55 + 4.1 - t * 0.013, ny * 0.75 + 2.3 + t * 0.017, 3);
+          // Rare caustic shimmer
+          const shimmer = Math.max(0, vnoise2(nx * 2.1 + t * 0.038, ny * 2.3 + 6.1 - t * 0.028) - 0.74) * 3.2;
+          const h = Math.max(0, Math.min(1, w1 * 0.58 + w2 * 0.42));
+          let r, g, b;
+          if (h < 0.5) {
+            const f = h * 2;
+            r = Math.round(6  + 20 * f);
+            g = Math.round(14 + 42 * f);
+            b = Math.round(28 + 66 * f);
+          } else {
+            const f = (h - 0.5) * 2;
+            r = Math.round(26 + 20 * f + shimmer * 45);
+            g = Math.round(56 + 52 * f + shimmer * 65);
+            b = Math.round(94 + 60 * f + shimmer * 55);
+          }
+          const idx = (py * dW + px) * 4;
+          d[idx]   = Math.min(255, r);
+          d[idx+1] = Math.min(255, g);
+          d[idx+2] = Math.min(255, b);
+          d[idx+3] = 255;
+        }
+      }
+      wCtx.putImageData(wd, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(wc, 0, 0, W, H);
+      ctx.globalAlpha = 1;
     }
 
     function draw(ts: number) {
@@ -133,6 +183,10 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.13 : 0.11})`;
       ctx.fillRect(0, 0, W, H);
+
+      // ── Water background (fades in during converge, full during grid) ─────────
+      const waterAlpha = phase === "float" ? 0 : phase === "converge" ? phaseT * 0.30 : 0.30;
+      drawWater(t, waterAlpha);
 
       const { x: mX, y: mY } = mouseRef.current;
       const scrollTiltY = scrollRef.current * 0.4;
