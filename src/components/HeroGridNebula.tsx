@@ -92,19 +92,34 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     let W = 0, H = 0;
     const nodes = nodesRef.current;
 
-    const resize = () => { W = canvas.width = canvas.offsetWidth; H = canvas.height = canvas.offsetHeight; };
+    const isMobile = () => window.innerWidth < 768;
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = canvas.offsetWidth;
+      H = canvas.offsetHeight;
+      canvas.width  = W * dpr;
+      canvas.height = H * dpr;
+      ctx.scale(dpr, dpr);
+    };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    canvas.addEventListener("mousemove", (e) => {
+    const getCanvasPos = (clientX: number, clientY: number) => {
       const r = canvas.getBoundingClientRect();
-      mouseRef.current = { x: e.clientX - r.left, y: e.clientY - r.top };
-    });
+      return { x: clientX - r.left, y: clientY - r.top };
+    };
+    canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      mouseRef.current = getCanvasPos(t.clientX, t.clientY);
+    }, { passive: false });
+    canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
-    // Water offscreen buffer (scaled up by drawImage with high-quality smoothing)
-    const WW = 240, WH = 135;
+    // Water offscreen buffer — lower res on mobile to save CPU
+    const WW = isMobile() ? 120 : 240, WH = isMobile() ? 68 : 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
     const wCtx = wCanvas.getContext("2d")!;
