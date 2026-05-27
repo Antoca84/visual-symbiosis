@@ -52,13 +52,15 @@ const About = () => {
 
             <ScrollReveal delay={0.2}>
               <div>
-                <img
-                  src={aboutImage}
-                  alt="Industrial Magic studio"
-                  className="w-full object-cover"
-                  style={{ aspectRatio: "3/4" }}
-                  loading="lazy"
-                />
+                <div className="w-full overflow-hidden" style={{ aspectRatio: "3/4" }}>
+                  <img
+                    src={aboutImage}
+                    alt="Industrial Magic studio"
+                    className="w-full object-cover"
+                    style={{ height: "110%", marginTop: "-5%" }}
+                    loading="lazy"
+                  />
+                </div>
               </div>
             </ScrollReveal>
           </div>
