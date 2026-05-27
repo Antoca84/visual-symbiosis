@@ -124,19 +124,32 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       const h1El = document.querySelector("h1");
       if (!h1El) return;
-      const h1Rect     = h1El.getBoundingClientRect();
       const cs         = getComputedStyle(h1El);
       const fontFamily = cs.fontFamily;
       const ls         = parseFloat(cs.letterSpacing);
       const actualFontSize = parseFloat(cs.fontSize);
 
-      // Baselines always anchored to actual DOM positions
-      const industrial_y = h1Rect.top + actualFontSize * 0.78;
-      const magic_y      = industrial_y + actualFontSize * 0.85;
-      const padLeft      = h1Rect.left;
+      let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
 
-      // Mobile: upscale font for sampling only → denser pixel coverage at same position
-      const fontSize = mob ? Math.min(W * 0.22, actualFontSize * 2.6) : actualFontSize;
+      if (mob) {
+        // Mobile: compute purely from canvas dimensions + known CSS values.
+        // getBoundingClientRect() is unreliable on iOS (100vh ≠ visual viewport).
+        // These constants mirror HeroSection.tsx exactly:
+        //   pb-16 = 64px, tagline + mt-6 ≈ 48px, label + mb-3 ≈ 32px
+        const pb       = 64;   // pb-16
+        const tagSpace = 48;   // tagline height + mt-6
+        magic_y      = H - pb - tagSpace;
+        industrial_y = magic_y - actualFontSize * 0.85;
+        padLeft      = W * 0.064;   // px-6 ≈ 6.4% of width
+        fontSize     = Math.min(W * 0.22, actualFontSize * 2.6); // upscaled for density
+      } else {
+        // Desktop: read exact positions from DOM (no iOS viewport quirks)
+        const h1Rect = h1El.getBoundingClientRect();
+        fontSize     = actualFontSize;
+        padLeft      = h1Rect.left;
+        industrial_y = h1Rect.top + actualFontSize * 0.78;
+        magic_y      = industrial_y + actualFontSize * 0.85;
+      }
 
       const tc = document.createElement("canvas");
       tc.width = W; tc.height = H;
