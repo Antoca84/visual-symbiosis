@@ -115,6 +115,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     // Sample "Industrial\nMagic" pixel positions → assign as letter targets to nodes
     const sampleLetterPositions = async () => {
       await document.fonts.ready;
+      // Double rAF: ensures Framer Motion has painted and layout is stable
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       if (!W || !H) return;
 
       const FL  = Math.min(W, H) * 0.36;
@@ -122,39 +124,19 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       const h1El = document.querySelector("h1");
       if (!h1El) return;
+      const h1Rect     = h1El.getBoundingClientRect();
       const cs         = getComputedStyle(h1El);
       const fontFamily = cs.fontFamily;
       const ls         = parseFloat(cs.letterSpacing);
+      const actualFontSize = parseFloat(cs.fontSize);
 
-      let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
+      // Baselines always anchored to actual DOM positions
+      const industrial_y = h1Rect.top + actualFontSize * 0.78;
+      const magic_y      = industrial_y + actualFontSize * 0.85;
+      const padLeft      = h1Rect.left;
 
-      if (mob) {
-        // Mobile: upscale font 2.2× for sampling only → denser pixel coverage
-        // keeps world-space targets near where the actual h1 appears
-        const actualFontSize = parseFloat(cs.fontSize);
-        fontSize = Math.min(W * 0.22, actualFontSize * 2.6);
-        const h1Rect = h1El.getBoundingClientRect();
-        padLeft = h1Rect.left;
-        // Scale baselines from actual h1 position using the ratio
-        const scale = fontSize / actualFontSize;
-        const actualIndustrialY = h1Rect.top + actualFontSize * 0.78;
-        const actualMagicY      = actualIndustrialY + actualFontSize * 0.85;
-        // Keep same anchor (magic_y) but render larger text upward from it
-        magic_y      = actualMagicY;
-        industrial_y = magic_y - fontSize * 0.85;
-        // Clamp so text stays on canvas
-        if (industrial_y < fontSize) {
-          magic_y      += fontSize - industrial_y;
-          industrial_y  = fontSize;
-        }
-      } else {
-        // Desktop: exact DOM positions
-        const h1Rect = h1El.getBoundingClientRect();
-        fontSize     = parseFloat(cs.fontSize);
-        padLeft      = h1Rect.left;
-        industrial_y = h1Rect.top + fontSize * 0.78;
-        magic_y      = industrial_y + fontSize * 0.85;
-      }
+      // Mobile: upscale font for sampling only → denser pixel coverage at same position
+      const fontSize = mob ? Math.min(W * 0.22, actualFontSize * 2.6) : actualFontSize;
 
       const tc = document.createElement("canvas");
       tc.width = W; tc.height = H;
