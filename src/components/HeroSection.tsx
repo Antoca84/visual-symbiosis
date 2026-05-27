@@ -4,6 +4,9 @@ import { HeroGridNebula } from "@/components/HeroGridNebula";
 
 const HeroSection = () => {
   const sectionRef = useRef<HTMLElement>(null);
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const titleDelay    = isMobile ? 1.6 : 3.0;
+  const subtitleDelay = isMobile ? 2.4 : 3.8;
   
   // Track scroll progress within the hero section
   const { scrollYProgress } = useScroll({
@@ -35,7 +38,7 @@ const HeroSection = () => {
           animate={{ opacity: 1 }}
           transition={{
             duration: 1.0,
-            delay: 3.0,
+            delay: titleDelay,
             ease: [0.25, 0.1, 0.25, 1],
           }}
           style={{ opacity: textOpacity }}
@@ -48,7 +51,7 @@ const HeroSection = () => {
           className="mt-6 text-[11px] tracking-[0.3em] uppercase text-muted-foreground border-l border-foreground/10 pl-4 md:pl-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 3.8, ease: "easeOut" }}
+          transition={{ duration: 1, delay: subtitleDelay, ease: "easeOut" }}
         >
           VFX, CGI, and 3D at the intersection of technical precision
           and artistic vision. We make the extraordinary, for everyone.

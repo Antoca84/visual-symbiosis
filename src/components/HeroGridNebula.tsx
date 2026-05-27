@@ -274,10 +274,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${clearAlpha})`;
       ctx.fillRect(0, 0, W, H);
 
-      // ── Water background (letter phase: hidden; fades in during converge) ─────
-      const waterAlpha =
-        phase === "float" || phase === "letter" ? 0 :
-        phase === "converge" ? phaseT * 0.55 : 0.55;
+      // ── Water background (skip on mobile; fades in during converge on desktop) ─
+      const waterAlpha = isMobile()
+        ? 0
+        : phase === "float" || phase === "letter" ? 0
+        : phase === "converge" ? phaseT * 0.55 : 0.55;
       drawWater(t, waterAlpha);
 
       const { x: mX, y: mY } = mouseRef.current;
@@ -300,7 +301,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
         } else if (phase === "letter") {
           const target = n.letterTarget;
-          if (target && letterSampled) {
+          if (!isMobile() && target && letterSampled) {
             const localT = Math.max(0, (phaseT - n.letterDelay) / Math.max(0.01, 1 - n.letterDelay));
             if (localT > 0) {
               const force = localT * localT * 0.14;

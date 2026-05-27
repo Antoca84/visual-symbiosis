@@ -87,7 +87,7 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
       hash(x * 127.1 + y * 311.7 + t * 74.3);
 
     // ── Spawn ────────────────────────────────────────────────────────────────
-    const COUNT = window.innerWidth < 768 ? 220 : 520;
+    const COUNT = window.innerWidth < 768 ? 80 : 520;
 
     const spawn = (): Particle => {
       let nx = Math.random(), ny = Math.random(), luma = 0.5;
@@ -149,8 +149,9 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
         ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
 
-        // Soft glow halo
-        ctx.globalAlpha = alpha * 0.10;
+        // Soft glow halo — larger particles get 20% less glow
+        const sizeNorm = (p.size - 0.5) / 1.6;
+        ctx.globalAlpha = alpha * 0.10 * (1 - sizeNorm * 0.20);
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 5.5, 0, Math.PI * 2); ctx.fill();
       }
 
