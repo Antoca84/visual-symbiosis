@@ -118,22 +118,30 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       if (!W || !H) return;
 
       const FL = Math.min(W, H) * 0.36;
-      const md = W >= 768;
-      const fontSize = W >= 1280 ? 160 : W >= 1024 ? 128 : W >= 768 ? 72 : 48;
-      const padLeft   = md ? 48 : 24;
-      const padBottom = md ? 96 : 64;
-      // approximate vertical anchor: bottom of h1 "Magic" line
-      const magic_y      = H - padBottom - (md ? 64 : 52);
-      const industrial_y = magic_y - Math.round(fontSize * 0.85);
+
+      // Read exact layout from the DOM to guarantee alignment
+      const h1El = document.querySelector("h1");
+      if (!h1El) return;
+      const h1Rect = h1El.getBoundingClientRect();
+      const cs = getComputedStyle(h1El);
+      const fontSize   = parseFloat(cs.fontSize);
+      const fontFamily = cs.fontFamily;
+      const lineHeight = fontSize * 0.85;         // leading-[0.85]
+      const padLeft    = h1Rect.left;
+      // Baseline = top of line box + ascender (≈78% of font-size for common serifs)
+      const industrial_y = h1Rect.top + fontSize * 0.78;
+      const magic_y      = industrial_y + lineHeight;
 
       const tc = document.createElement("canvas");
       tc.width = W; tc.height = H;
       const tCtx = tc.getContext("2d")!;
       tCtx.fillStyle = "white";
-      tCtx.font = `${fontSize}px serif`;
+      tCtx.font = `${fontSize}px ${fontFamily}`;
       tCtx.textAlign = "left";
       tCtx.textBaseline = "alphabetic";
-      if ("letterSpacing" in tCtx) (tCtx as unknown as Record<string,string>).letterSpacing = `${(fontSize * 0.04).toFixed(1)}px`;
+      const ls = parseFloat(cs.letterSpacing);
+      if ("letterSpacing" in tCtx)
+        (tCtx as unknown as Record<string,string>).letterSpacing = `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
       tCtx.fillText("Industrial", padLeft, industrial_y);
       tCtx.fillText("Magic",      padLeft, magic_y);
 
