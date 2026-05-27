@@ -261,7 +261,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.y = n.ry + n.dy - scrollTiltY;
           n.z = n.dz + noiseZ;
           // Spring back
-          const K = 0.072, DAMP = 0.878;
+          const K = 0.11, DAMP = 0.84;
           n.vx += -n.dx * K; n.vy += -n.dy * K; n.vz += -n.dz * K;
           n.vx *= DAMP; n.vy *= DAMP; n.vz *= DAMP;
           n.dx += n.vx; n.dy += n.vy; n.dz += n.vz;
@@ -283,8 +283,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           const md = Math.sqrt(dx * dx + dy * dy);
           if (md < 160) {
             const str = (1 - md / 160) ** 2 * 0.018;
-            nodes[i].vz += str * 1.2;
-            nodes[i].dz = Math.min(nodes[i].dz, 0.55); // cap max displacement
+            nodes[i].vz += str * 1.0;
+            nodes[i].dz = Math.min(nodes[i].dz, 0.38); // cap below warm-color threshold
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
         }
@@ -348,10 +348,10 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             bl = Math.round(DEEP_BLUE[2] + (COLD_BLUE[2] - DEEP_BLUE[2]) * f);
           } else {
             const f = (t2 - 0.5) * 2;
-            const tC = avgDz > 0.5 ? ARTERIAL : BONE;
-            r  = Math.round(COLD_BLUE[0] + (tC[0] - COLD_BLUE[0]) * f);
-            g  = Math.round(COLD_BLUE[1] + (tC[1] - COLD_BLUE[1]) * f);
-            bl = Math.round(COLD_BLUE[2] + (tC[2] - COLD_BLUE[2]) * f);
+            // Stay in cool blue-white range, no warm colors
+            r  = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
+            g  = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
+            bl = Math.round(COLD_BLUE[2] + (245 - COLD_BLUE[2]) * f);
           }
           const disp  = Math.abs(avgDz);
           const alpha = Math.min(0.90, 0.20 + disp * 2.6);
@@ -375,9 +375,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             if (!pr) continue;
             const dz = nodes[i].dz;
             if (dz < 0.18) continue;
-            const intensity = Math.min(1, (dz - 0.18) / 0.7);
-            const col = dz > 0.5 ? ARTERIAL : BONE;
-            ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${(intensity * 0.7).toFixed(4)})`;
+            const intensity = Math.min(1, (dz - 0.18) / 0.5);
+            ctx.fillStyle = `rgba(200,220,245,${(intensity * 0.65).toFixed(4)})`;
             ctx.beginPath(); ctx.arc(pr.sx, pr.sy, intensity * 2.8, 0, Math.PI * 2); ctx.fill();
           }
         }
