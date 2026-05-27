@@ -51,7 +51,7 @@ const About = () => {
             </ScrollReveal>
 
             <ScrollReveal delay={0.2}>
-              <div className="md:mt-16">
+              <div>
                 <img
                   src={aboutImage}
                   alt="Industrial Magic studio"
