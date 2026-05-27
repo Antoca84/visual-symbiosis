@@ -24,26 +24,30 @@ const BONE      : [number,number,number] = [221, 213, 192];
 const ARTERIAL  : [number,number,number] = [147, 37,  37];
 
 // ── Phase timing ──────────────────────────────────────────────────────────────
-const P1 = 2.8;  // float duration (s)
-const P2 = 2.6;  // converge duration (s)
+const P1       = 1.8;   // float (s)
+const P_LETTER = 1.8;   // letter formation (s)
+const P2       = 2.2;   // converge to grid (s)
 
 // ── Grid config ───────────────────────────────────────────────────────────────
-const COLS   = 65;
-const ROWS   = 38;
+const COLS    = 65;
+const ROWS    = 38;
 const N_NODES = COLS * ROWS;
-const SPAN_X = 4.4;  // ±4.4 world units — bleeds past screen edges
-const SPAN_Y = 2.5;
+const SPAN_X  = 4.4;
+const SPAN_Y  = 2.5;
+const CAM_DIST = 2.0;
 
 // ── Node ──────────────────────────────────────────────────────────────────────
 interface Node {
-  rx: number; ry: number;       // grid rest position (world)
-  x:  number; y:  number; z: number;  // current world position
+  rx: number; ry: number;
+  x:  number; y:  number; z: number;
   vx: number; vy: number; vz: number;
-  dx: number; dy: number; dz: number; // spring displacement (phase 3)
-  heat: number;        // 0=cold 1=max — thermal trail from mouse
-  convDelay: number;  // 0..1 — normalised delay within P2 (center = 0, edge = ~0.75)
+  dx: number; dy: number; dz: number;
+  heat: number;
+  convDelay: number;
+  letterTarget: { wx: number; wy: number } | null;
+  letterDelay: number;
   locked: boolean;
-  tier: 0 | 1 | 2;   // dot rendering tier during float
+  tier: 0 | 1 | 2;
 }
 
 function makeNodes(): Node[] {
@@ -52,7 +56,6 @@ function makeNodes(): Node[] {
     const c = i % COLS, r = Math.floor(i / COLS);
     const rx = (c / (COLS - 1) - 0.5) * SPAN_X * 2;
     const ry = (r / (ROWS - 1) - 0.5) * SPAN_Y * 2;
-    // Random scatter initial position (sphere)
     const rad = Math.cbrt(Math.random()) * 2.4;
     const θ = Math.random() * Math.PI * 2;
     const φ = Math.acos(2 * Math.random() - 1);
@@ -65,8 +68,9 @@ function makeNodes(): Node[] {
       vx: 0, vy: 0, vz: 0,
       dx: 0, dy: 0, dz: 0,
       heat: 0,
-      // Center-outward convergence wave
       convDelay: (Math.sqrt(rx*rx + ry*ry) / maxDist) * 0.72,
+      letterTarget: null,
+      letterDelay: Math.random() * 0.35,
       locked: false,
       tier: roll < 0.76 ? 0 : roll < 0.93 ? 1 : 2,
     };
@@ -93,6 +97,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     const ctx    = canvas.getContext("2d")!;
     let W = 0, H = 0;
     const nodes = nodesRef.current;
+    let letterSampled = false;
 
     const isMobile = () => window.innerWidth < 768;
     const resize = () => {
@@ -107,6 +112,63 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
+    // Sample "Industrial\nMagic" pixel positions → assign as letter targets to nodes
+    const sampleLetterPositions = async () => {
+      await document.fonts.ready;
+      if (!W || !H) return;
+
+      const FL = Math.min(W, H) * 0.36;
+      const md = W >= 768;
+      const fontSize = W >= 1280 ? 160 : W >= 1024 ? 128 : W >= 768 ? 72 : 48;
+      const padLeft   = md ? 48 : 24;
+      const padBottom = md ? 96 : 64;
+      // approximate vertical anchor: bottom of h1 "Magic" line
+      const magic_y      = H - padBottom - (md ? 64 : 52);
+      const industrial_y = magic_y - Math.round(fontSize * 0.85);
+
+      const tc = document.createElement("canvas");
+      tc.width = W; tc.height = H;
+      const tCtx = tc.getContext("2d")!;
+      tCtx.fillStyle = "white";
+      tCtx.font = `${fontSize}px serif`;
+      tCtx.textAlign = "left";
+      tCtx.textBaseline = "alphabetic";
+      if ("letterSpacing" in tCtx) (tCtx as unknown as Record<string,string>).letterSpacing = `${(fontSize * 0.04).toFixed(1)}px`;
+      tCtx.fillText("Industrial", padLeft, industrial_y);
+      tCtx.fillText("Magic",      padLeft, magic_y);
+
+      const stride = 5;
+      const imgData = tCtx.getImageData(0, 0, W, H);
+      const pix = imgData.data;
+      const candidates: Array<{ wx: number; wy: number }> = [];
+
+      for (let sy = 0; sy < H; sy += stride) {
+        for (let sx = 0; sx < W; sx += stride) {
+          if (pix[(sy * W + sx) * 4 + 3] > 128) {
+            candidates.push({
+              wx: (sx - W * 0.5) * CAM_DIST / FL,
+              wy: (H * 0.46 - sy) * CAM_DIST / FL,
+            });
+          }
+        }
+      }
+
+      if (candidates.length < 80) return;
+
+      // Fisher-Yates shuffle candidates
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+      }
+
+      const assign = Math.min(candidates.length, N_NODES);
+      for (let i = 0; i < assign; i++) {
+        nodes[i].letterTarget = candidates[i];
+      }
+      letterSampled = true;
+    };
+    sampleLetterPositions();
+
     const getCanvasPos = (clientX: number, clientY: number) => {
       const r = canvas.getBoundingClientRect();
       return { x: clientX - r.left, y: clientY - r.top };
@@ -120,19 +182,18 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     }, { passive: false });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
-    // Water offscreen buffer — lower res on mobile to save CPU
+    // Water offscreen buffer
     const WW = isMobile() ? 120 : 240, WH = isMobile() ? 68 : 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
     const wCtx = wCanvas.getContext("2d")!;
     waterRef.current = { canvas: wCanvas, ctx: wCtx, data: wCtx.createImageData(WW, WH) };
 
-    // Projection cache (avoid alloc per frame)
     type ProjResult = { sx: number; sy: number; s: number } | null;
     const projCache: ProjResult[] = new Array(N_NODES).fill(null);
 
-    function project(wx: number, wy: number, wz: number, FL: number, camDist: number): ProjResult {
-      const dz = wz + camDist;
+    function project(wx: number, wy: number, wz: number, FL: number): ProjResult {
+      const dz = wz + CAM_DIST;
       if (dz < 0.01) return null;
       const s = FL / dz;
       return { sx: W * 0.5 + wx * s, sy: H * 0.46 - wy * s, s };
@@ -148,10 +209,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         for (let px = 0; px < dW; px++) {
           const nx = px / dW * 3.2;
           const ny = py / dH * 1.8;
-          // Two FBM layers — slow drift, perceptibly moving
           const w1 = fbm2(nx + t * 0.055, ny + 0.5 + t * 0.038, 4);
           const w2 = fbm2(nx * 0.55 + 4.1 - t * 0.041, ny * 0.75 + 2.3 + t * 0.049, 4);
-          // Caustic shimmer — more frequent than before
           const shimmer = Math.max(0, vnoise2(nx * 2.1 + t * 0.09, ny * 2.3 + 6.1 - t * 0.07) - 0.62) * 2.8;
           const h = Math.max(0, Math.min(1, w1 * 0.55 + w2 * 0.45));
           let r, g, b;
@@ -190,22 +249,27 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       tRef.current += 0.011;
       const t = tRef.current;
 
-      const phase: "float" | "converge" | "grid" =
-        elapsed < P1       ? "float" :
-        elapsed < P1 + P2  ? "converge" : "grid";
-      const phaseT = phase === "converge" ? Math.min(1, (elapsed - P1) / P2) : 1;
+      const phase: "float" | "letter" | "converge" | "grid" =
+        elapsed < P1                   ? "float"    :
+        elapsed < P1 + P_LETTER        ? "letter"   :
+        elapsed < P1 + P_LETTER + P2   ? "converge" : "grid";
 
-      // Adaptive projection params — fill more screen as grid is larger
-      const FL      = Math.min(W, H) * 0.36;
-      const CAM_DIST = 2.0;
+      const phaseT =
+        phase === "letter"   ? Math.min(1, (elapsed - P1) / P_LETTER) :
+        phase === "converge" ? Math.min(1, (elapsed - P1 - P_LETTER) / P2) : 1;
+
+      const FL = Math.min(W, H) * 0.36;
 
       // ── Clear ────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${phase === "grid" ? 0.92 : 0.11})`;
+      const clearAlpha = phase === "grid" ? 0.92 : phase === "letter" ? 0.18 : 0.11;
+      ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${clearAlpha})`;
       ctx.fillRect(0, 0, W, H);
 
-      // ── Water background (fades in during converge, full during grid) ─────────
-      const waterAlpha = phase === "float" ? 0 : phase === "converge" ? phaseT * 0.55 : 0.55;
+      // ── Water background (letter phase: hidden; fades in during converge) ─────
+      const waterAlpha =
+        phase === "float" || phase === "letter" ? 0 :
+        phase === "converge" ? phaseT * 0.55 : 0.55;
       drawWater(t, waterAlpha);
 
       const { x: mX, y: mY } = mouseRef.current;
@@ -214,7 +278,6 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // ── Physics ───────────────────────────────────────────────────────────────
       for (const n of nodes) {
         if (phase === "float") {
-          // FBM nebula flow
           const S = 0.48;
           const fnx = (fbm2(n.x * S + t * 0.26, n.y * S + 1.73) - 0.5) * 2;
           const fny = (fbm2(n.x * S + 7.31, n.y * S + t * 0.26 + 2.11) - 0.5) * 2;
@@ -222,32 +285,55 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.vx += fnx * 0.0017;
           n.vy += fny * 0.0017;
           n.vz += fnz * 0.001;
-          // Weak inward gravity
           const d = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
           if (d > 0.9) { const g = (d - 0.9) * 0.00038; n.vx -= n.x * g; n.vy -= n.y * g; n.vz -= n.z * g; }
           n.vx *= 0.967; n.vy *= 0.967; n.vz *= 0.967;
           n.x += n.vx; n.y += n.vy; n.z += n.vz;
 
-        } else if (phase === "converge" && !n.locked) {
-          // Normalised local time for this node (0 before delay, 0→1 after)
-          const localT = Math.max(0, (phaseT - n.convDelay) / Math.max(0.01, 1 - n.convDelay));
+        } else if (phase === "letter") {
+          const target = n.letterTarget;
+          if (target && letterSampled) {
+            const localT = Math.max(0, (phaseT - n.letterDelay) / Math.max(0.01, 1 - n.letterDelay));
+            if (localT > 0) {
+              const force = localT * localT * 0.14;
+              n.vx += (target.wx - n.x) * force;
+              n.vy += (target.wy - n.y) * force;
+              n.vz += (0 - n.z) * force;
+            } else {
+              // Still floating before individual delay kicks in
+              const S = 0.48;
+              n.vx += (fbm2(n.x * S + t * 0.22, n.y * S + 1.73) - 0.5) * 2 * 0.0011;
+              n.vy += (fbm2(n.x * S + 7.31, n.y * S + t * 0.22 + 2.11) - 0.5) * 2 * 0.0011;
+            }
+          } else {
+            // No letter target (or sampling not done) — keep floating
+            const S = 0.48;
+            const fnx = (fbm2(n.x * S + t * 0.26, n.y * S + 1.73) - 0.5) * 2;
+            const fny = (fbm2(n.x * S + 7.31, n.y * S + t * 0.26 + 2.11) - 0.5) * 2;
+            const fnz = (fbm2(n.z * 0.4 + t * 0.18, n.x * 0.3 + 4.0) - 0.5) * 2;
+            n.vx += fnx * 0.0017;
+            n.vy += fny * 0.0017;
+            n.vz += fnz * 0.001;
+            const d = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
+            if (d > 0.9) { const g = (d - 0.9) * 0.00038; n.vx -= n.x * g; n.vy -= n.y * g; n.vz -= n.z * g; }
+          }
+          n.vx *= 0.88; n.vy *= 0.88; n.vz *= 0.88;
+          n.x += n.vx; n.y += n.vy; n.z += n.vz;
 
+        } else if (phase === "converge" && !n.locked) {
+          const localT = Math.max(0, (phaseT - n.convDelay) / Math.max(0.01, 1 - n.convDelay));
           if (localT > 0) {
-            // Accelerating pull toward (rx, ry, 0)
             const force = localT * localT * 0.20;
             n.vx += (n.rx - n.x) * force;
             n.vy += (n.ry - n.y) * force;
             n.vz += (0    - n.z) * force;
           } else {
-            // Still floating before delay
             const S = 0.48;
             n.vx += (fbm2(n.x * S + t * 0.22, n.y * S + 1.73) - 0.5) * 2 * 0.0011;
             n.vy += (fbm2(n.x * S + 7.31, n.y * S + t * 0.22 + 2.11) - 0.5) * 2 * 0.0011;
           }
           n.vx *= 0.86; n.vy *= 0.86; n.vz *= 0.86;
           n.x += n.vx; n.y += n.vy; n.z += n.vz;
-
-          // Lock when close enough, or force-lock at phase end
           if (Math.hypot(n.x - n.rx, n.y - n.ry, n.z) < 0.05 || phaseT >= 0.999) {
             n.x = n.rx; n.y = n.ry; n.z = 0;
             n.vx = 0; n.vy = 0; n.vz = 0;
@@ -255,19 +341,15 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           }
 
         } else if (phase === "grid") {
-          // Ensure locked (in case converge ended early)
           if (!n.locked) { n.x = n.rx; n.y = n.ry; n.z = 0; n.locked = true; }
-          // FBM Z breathing
           const noiseZ = (fbm2(n.rx * 0.6 + t * 0.10, n.ry * 0.6 + 2.7) - 0.5) * 0.08;
           n.x = n.rx + n.dx;
           n.y = n.ry + n.dy - scrollTiltY;
           n.z = n.dz + noiseZ;
-          // Spring back
           const K = 0.11, DAMP = 0.84;
           n.vx += -n.dx * K; n.vy += -n.dy * K; n.vz += -n.dz * K;
           n.vx *= DAMP; n.vy *= DAMP; n.vz *= DAMP;
           n.dx += n.vx; n.dy += n.vy; n.dz += n.vz;
-          // Heat decay — slow cool-down for trailing effect
           n.heat *= 0.964;
         }
       }
@@ -275,7 +357,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // ── Project all ───────────────────────────────────────────────────────────
       for (let i = 0; i < N_NODES; i++) {
         const n = nodes[i];
-        projCache[i] = project(n.x, n.y, n.z, FL, CAM_DIST);
+        projCache[i] = project(n.x, n.y, n.z, FL);
       }
 
       // ── Mouse force (grid only) ───────────────────────────────────────────────
@@ -290,7 +372,6 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             const str = proximity * 0.024;
             nodes[i].vz += str * 1.6;
             nodes[i].dz = Math.min(nodes[i].dz, 0.42);
-            // Inject heat — center gets max heat, edge gets less
             nodes[i].heat = Math.min(1, nodes[i].heat + proximity * 0.11);
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
@@ -300,7 +381,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // ── Draw ──────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "lighter";
 
-      // --- Floating / converging dots (nebula style) ---
+      // --- Floating / letter / converging dots (nebula style) ---
       if (phase !== "grid") {
         for (let i = 0; i < N_NODES; i++) {
           const n = nodes[i];
@@ -323,9 +404,17 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             g = Math.round(COLD_BLUE[1] + (BONE[1] - COLD_BLUE[1]) * f);
             b = Math.round(COLD_BLUE[2] + (BONE[2] - COLD_BLUE[2]) * f);
           }
+
+          // Nodes near their letter target glow slightly brighter
+          let brightBoost = 1;
+          if (phase === "letter" && n.letterTarget) {
+            const dist = Math.hypot(n.x - n.letterTarget.wx, n.y - n.letterTarget.wy);
+            brightBoost = dist < 0.25 ? 1.0 + (1 - dist / 0.25) * 1.4 : 1;
+          }
+
           const [baseSize, baseAlpha] = n.tier === 2 ? [0.014, 0.92] : n.tier === 1 ? [0.007, 0.58] : [0.003, 0.32];
-          const sz = Math.max(0.2, s * baseSize);
-          const alpha = baseAlpha * depthT;
+          const sz = Math.max(0.2, s * baseSize * (phase === "letter" ? 1.1 : 1));
+          const alpha = Math.min(1, baseAlpha * depthT * brightBoost);
           if (alpha < 0.02) continue;
 
           ctx.fillStyle = `rgba(${r},${g},${b},${(alpha * 0.12).toFixed(4)})`;
@@ -335,7 +424,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
-      // --- Grid lines (locked nodes during converge, all nodes during grid) ---
+      // --- Grid lines (locked nodes during converge, all during grid) ---
       if (phase === "converge" || phase === "grid") {
         ctx.lineCap = "round"; ctx.lineJoin = "round";
 
@@ -349,22 +438,18 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           const avgHeat = (ni.heat + nj.heat) * 0.5;
           let r: number, g: number, bl: number;
           if (avgHeat > 0.01) {
-            // Thermal path: cold blue → white-hot → arterial red (as heat decays)
             if (avgHeat > 0.65) {
-              // White-hot core
               const f = (avgHeat - 0.65) / 0.35;
               r  = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * f);
               g  = Math.round(ARTERIAL[1] + (255 - ARTERIAL[1]) * f);
               bl = Math.round(ARTERIAL[2] + (255 - ARTERIAL[2]) * f);
             } else {
-              // Cooling: cold blue → arterial red
               const f = avgHeat / 0.65;
               r  = Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * f);
               g  = Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * f);
               bl = Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * f);
             }
           } else {
-            // Normal cool palette
             const t2 = Math.max(0, Math.min(1, avgDz * 1.8 + 0.45));
             if (t2 < 0.5) {
               const f = t2 * 2;
@@ -393,7 +478,6 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           for (let c = 0; c < COLS; c++)
             drawSeg(r * COLS + c, (r + 1) * COLS + c);
 
-        // Hot-displacement nodes
         if (phase === "grid") {
           for (let i = 0; i < N_NODES; i++) {
             const pr = projCache[i];
@@ -413,14 +497,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       // ── Post ──────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
-
-      // Bottom dissolve into page
       const gd = ctx.createLinearGradient(0, H * 0.65, 0, H);
       gd.addColorStop(0, "rgba(0,0,0,0)");
       gd.addColorStop(1, `rgba(${BG[0]},${BG[1]},${BG[2]},1)`);
       ctx.fillStyle = gd; ctx.fillRect(0, 0, W, H);
 
-      // Edge vignette — clips oversized grid cleanly
       const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.18, W / 2, H / 2, W * 0.82);
       vig.addColorStop(0, "rgba(0,0,0,0)");
       vig.addColorStop(1, `rgba(${BG[0]},${BG[1]},${BG[2]},0.72)`);

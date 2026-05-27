@@ -31,11 +31,11 @@ const HeroSection = () => {
         </div>
         <motion.h1
           className="font-serif text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem] leading-[0.85] tracking-[0.04em] text-foreground"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{
-            duration: 1.4,
-            delay: 1.6,
+            duration: 1.0,
+            delay: 3.0,
             ease: [0.25, 0.1, 0.25, 1],
           }}
           style={{ opacity: textOpacity }}
@@ -48,7 +48,7 @@ const HeroSection = () => {
           className="mt-6 text-[11px] tracking-[0.3em] uppercase text-muted-foreground border-l border-foreground/10 pl-4 md:pl-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 2.4, ease: "easeOut" }}
+          transition={{ duration: 1, delay: 3.8, ease: "easeOut" }}
         >
           VFX, CGI, and 3D at the intersection of technical precision
           and artistic vision. We make the extraordinary, for everyone.
