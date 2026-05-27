@@ -36,13 +36,13 @@ const Navigation = () => {
       animate={{ y: hidden ? -100 : 0 }}
       transition={{ duration: 0.35, ease: "easeInOut" }}
       className={cn(
-        "fixed top-0 left-0 right-0 z-50 py-5 transition-all duration-500",
+        "fixed top-0 left-0 right-0 z-50 py-5 px-6 md:px-12 flex items-center justify-between transition-all duration-500",
         scrolled
           ? "backdrop-blur-md bg-background/60 border-b border-border/30"
           : "bg-transparent"
       )}
     >
-      <div className="max-w-screen-xl mx-auto px-6 md:px-12 flex items-center justify-between">
+      <div className="flex items-center justify-between w-full">
         <Link
           to="/"
           className="font-serif text-xl md:text-2xl tracking-[0.15em] text-foreground uppercase"
