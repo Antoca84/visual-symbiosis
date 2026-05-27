@@ -7,7 +7,7 @@ const Contact = () => {
       <Navigation />
 
       <section className="flex-1 flex items-center px-6 md:px-12">
-        <div className="max-w-screen-xl mx-auto w-full">
+        <div className="w-full">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

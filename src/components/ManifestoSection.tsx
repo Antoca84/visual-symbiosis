@@ -3,7 +3,7 @@ import ScrollReveal from "./ScrollReveal";
 const ManifestoSection = () => {
   return (
     <section className="py-16 md:py-24 px-6 md:px-12">
-      <div className="max-w-screen-xl mx-auto">
+      <div>
         <ScrollReveal>
           <div className="md:ml-[20%] lg:ml-[25%] max-w-2xl">
             <p className="font-serif text-2xl md:text-3xl lg:text-[2.5rem] leading-[1.4] text-foreground/70 italic">

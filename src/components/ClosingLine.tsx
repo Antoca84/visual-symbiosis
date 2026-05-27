@@ -4,7 +4,7 @@ const ClosingLine = () => {
   return (
     <section className="py-32 md:py-48 px-6 md:px-12">
       <ScrollReveal>
-        <div className="max-w-screen-xl mx-auto">
+        <div>
           <p className="font-serif text-3xl md:text-5xl lg:text-6xl text-foreground/60 italic leading-[1.3]">
             Exceptional quality has always existed.
             <br />

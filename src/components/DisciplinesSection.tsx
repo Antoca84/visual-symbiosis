@@ -44,7 +44,7 @@ const DisciplinesSection = () => {
 
   return (
     <section className="py-16 md:py-24 px-6 md:px-12 border-t border-border">
-      <div className="max-w-screen-xl mx-auto">
+      <div>
         <motion.p
           className="text-[11px] tracking-[0.3em] uppercase text-muted-foreground mb-10 md:mb-14"
           initial={{ opacity: 0 }}

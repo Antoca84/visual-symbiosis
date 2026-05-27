@@ -9,7 +9,7 @@ const About = () => {
       <Navigation />
 
       <section className="pt-32 md:pt-44 px-6 md:px-12 pb-32 md:pb-48">
-        <div className="max-w-screen-xl mx-auto">
+        <div>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
