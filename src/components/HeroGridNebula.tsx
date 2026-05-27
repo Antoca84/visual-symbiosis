@@ -28,8 +28,8 @@ const P1 = 2.8;  // float duration (s)
 const P2 = 2.6;  // converge duration (s)
 
 // ── Grid config ───────────────────────────────────────────────────────────────
-const COLS   = 52;
-const ROWS   = 30;
+const COLS   = 65;
+const ROWS   = 38;
 const N_NODES = COLS * ROWS;
 const SPAN_X = 4.4;  // ±4.4 world units — bleeds past screen edges
 const SPAN_Y = 2.5;
