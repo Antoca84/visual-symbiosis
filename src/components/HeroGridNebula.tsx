@@ -281,10 +281,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           if (!pr) continue;
           const dx = pr.sx - mX, dy = pr.sy - mY;
           const md = Math.sqrt(dx * dx + dy * dy);
-          if (md < 190) {
-            const str = (1 - md / 190) ** 2 * 0.028;
-            nodes[i].vz += str * 2.8;
-            if (md > 1) { nodes[i].vx += (dx / md) * str * 0.35; nodes[i].vy -= (dy / md) * str * 0.35; }
+          if (md < 160) {
+            const str = (1 - md / 160) ** 2 * 0.018;
+            nodes[i].vz += str * 1.2;
+            nodes[i].dz = Math.min(nodes[i].dz, 0.55); // cap max displacement
+            if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
         }
       }
