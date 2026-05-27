@@ -100,6 +100,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     let letterSampled = false;
 
     const isMobile = () => window.innerWidth < 768;
+    const MOB    = isMobile();
+    const yScale = MOB ? 0.68 : 1.0; // compress grid height on mobile portrait
+
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       W = canvas.offsetWidth;
@@ -119,31 +122,27 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       if (!W || !H) return;
 
-      const FL  = Math.min(W, H) * 0.36;
-      const mob = isMobile();
+      const FL = Math.min(W, H) * 0.36;
 
       const h1El = document.querySelector("h1");
       if (!h1El) return;
       const cs         = getComputedStyle(h1El);
-      const fontFamily = cs.fontFamily;
-      const ls         = parseFloat(cs.letterSpacing);
-      const actualFontSize = parseFloat(cs.fontSize);
+      // Fallbacks defend against iOS returning empty/NaN values
+      const fontFamily     = cs.fontFamily || "serif";
+      const ls             = parseFloat(cs.letterSpacing) || 0;
+      const actualFontSize = parseFloat(cs.fontSize) || (mob ? 48 : 160);
 
       let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
 
-      if (mob) {
-        // Mobile: compute purely from canvas dimensions + known CSS values.
-        // getBoundingClientRect() is unreliable on iOS (100vh ≠ visual viewport).
-        // These constants mirror HeroSection.tsx exactly:
-        //   pb-16 = 64px, tagline + mt-6 ≈ 48px, label + mb-3 ≈ 32px
-        const pb       = 64;   // pb-16
-        const tagSpace = 48;   // tagline height + mt-6
-        magic_y      = H - pb - tagSpace;
+      if (MOB) {
+        // Mobile: position as percentage of H — immune to iOS 100vh / viewport quirks.
+        // h1 sits at ~83% of canvas height (pb-16=64 + tagline≈54 below h1).
+        magic_y      = H * 0.83;
         industrial_y = magic_y - actualFontSize * 0.85;
-        padLeft      = W * 0.064;   // px-6 ≈ 6.4% of width
-        fontSize     = Math.min(W * 0.22, actualFontSize * 2.6); // upscaled for density
+        padLeft      = W * 0.064;          // matches px-6
+        fontSize     = Math.min(W * 0.22, actualFontSize * 2.6);  // upscale for pixel density
       } else {
-        // Desktop: read exact positions from DOM (no iOS viewport quirks)
+        // Desktop: read exact positions from DOM
         const h1Rect = h1El.getBoundingClientRect();
         fontSize     = actualFontSize;
         padLeft      = h1Rect.left;
@@ -164,8 +163,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       tCtx.fillText("Industrial", padLeft, industrial_y);
       tCtx.fillText("Magic",      padLeft, magic_y);
 
-      // Mobile stride smaller to compensate for partially larger font on smaller canvas
-      const stride = mob ? 3 : 5;
+      const stride = MOB ? 3 : 5;
       const imgData = tCtx.getImageData(0, 0, W, H);
       const pix = imgData.data;
       const candidates: Array<{ wx: number; wy: number }> = [];
@@ -175,7 +173,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           if (pix[(sy * W + sx) * 4 + 3] > 128) {
             candidates.push({
               wx: (sx - W * 0.5) * CAM_DIST / FL,
-              wy: (H * 0.46 - sy) * CAM_DIST / FL,
+              // divide by yScale so project() maps back to the same screen pixel
+              wy: (H * 0.46 - sy) * CAM_DIST / (FL * yScale),
             });
           }
         }
@@ -224,7 +223,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const dz = wz + CAM_DIST;
       if (dz < 0.01) return null;
       const s = FL / dz;
-      return { sx: W * 0.5 + wx * s, sy: H * 0.46 - wy * s, s };
+      return { sx: W * 0.5 + wx * s, sy: H * 0.46 - wy * s * yScale, s };
     }
 
     function drawWater(t: number, alpha: number) {
@@ -295,7 +294,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       ctx.fillRect(0, 0, W, H);
 
       // ── Water background (skip on mobile; fades in during converge on desktop) ─
-      const waterAlpha = isMobile()
+      const waterAlpha = MOB
         ? 0
         : phase === "float" || phase === "letter" ? 0
         : phase === "converge" ? phaseT * 0.55 : 0.55;
