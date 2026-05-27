@@ -20,7 +20,7 @@ const About = () => {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-start">
+          <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-center">
             <ScrollReveal>
               <div className="space-y-8">
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
