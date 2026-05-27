@@ -40,6 +40,7 @@ interface Node {
   x:  number; y:  number; z: number;  // current world position
   vx: number; vy: number; vz: number;
   dx: number; dy: number; dz: number; // spring displacement (phase 3)
+  heat: number;        // 0=cold 1=max — thermal trail from mouse
   convDelay: number;  // 0..1 — normalised delay within P2 (center = 0, edge = ~0.75)
   locked: boolean;
   tier: 0 | 1 | 2;   // dot rendering tier during float
@@ -63,6 +64,7 @@ function makeNodes(): Node[] {
       z: (Math.random() - 0.5) * 2.5,
       vx: 0, vy: 0, vz: 0,
       dx: 0, dy: 0, dz: 0,
+      heat: 0,
       // Center-outward convergence wave
       convDelay: (Math.sqrt(rx*rx + ry*ry) / maxDist) * 0.72,
       locked: false,
@@ -265,6 +267,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.vx += -n.dx * K; n.vy += -n.dy * K; n.vz += -n.dz * K;
           n.vx *= DAMP; n.vy *= DAMP; n.vz *= DAMP;
           n.dx += n.vx; n.dy += n.vy; n.dz += n.vz;
+          // Heat decay — slow cool-down for trailing effect
+          n.heat *= 0.964;
         }
       }
 
@@ -282,9 +286,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           const dx = pr.sx - mX, dy = pr.sy - mY;
           const md = Math.sqrt(dx * dx + dy * dy);
           if (md < 170) {
-            const str = (1 - md / 170) ** 2 * 0.024;
+            const proximity = (1 - md / 170) ** 2;
+            const str = proximity * 0.024;
             nodes[i].vz += str * 1.6;
-            nodes[i].dz = Math.min(nodes[i].dz, 0.38);
+            nodes[i].dz = Math.min(nodes[i].dz, 0.42);
+            // Inject heat — center gets max heat, edge gets less
+            nodes[i].heat = Math.min(1, nodes[i].heat + proximity * 0.18);
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
         }
@@ -338,24 +345,42 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           const a = projCache[i], b = projCache[j];
           if (!a || !b) return;
 
-          const avgDz = (ni.dz + nj.dz) * 0.5;
-          const t2 = Math.max(0, Math.min(1, avgDz * 1.8 + 0.45));
+          const avgDz   = (ni.dz + nj.dz) * 0.5;
+          const avgHeat = (ni.heat + nj.heat) * 0.5;
           let r: number, g: number, bl: number;
-          if (t2 < 0.5) {
-            const f = t2 * 2;
-            r  = Math.round(DEEP_BLUE[0] + (COLD_BLUE[0] - DEEP_BLUE[0]) * f);
-            g  = Math.round(DEEP_BLUE[1] + (COLD_BLUE[1] - DEEP_BLUE[1]) * f);
-            bl = Math.round(DEEP_BLUE[2] + (COLD_BLUE[2] - DEEP_BLUE[2]) * f);
+          if (avgHeat > 0.01) {
+            // Thermal path: cold blue → white-hot → arterial red (as heat decays)
+            if (avgHeat > 0.65) {
+              // White-hot core
+              const f = (avgHeat - 0.65) / 0.35;
+              r  = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * f);
+              g  = Math.round(ARTERIAL[1] + (255 - ARTERIAL[1]) * f);
+              bl = Math.round(ARTERIAL[2] + (255 - ARTERIAL[2]) * f);
+            } else {
+              // Cooling: cold blue → arterial red
+              const f = avgHeat / 0.65;
+              r  = Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * f);
+              g  = Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * f);
+              bl = Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * f);
+            }
           } else {
-            const f = (t2 - 0.5) * 2;
-            // Stay in cool blue-white range, no warm colors
-            r  = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
-            g  = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
-            bl = Math.round(COLD_BLUE[2] + (245 - COLD_BLUE[2]) * f);
+            // Normal cool palette
+            const t2 = Math.max(0, Math.min(1, avgDz * 1.8 + 0.45));
+            if (t2 < 0.5) {
+              const f = t2 * 2;
+              r  = Math.round(DEEP_BLUE[0] + (COLD_BLUE[0] - DEEP_BLUE[0]) * f);
+              g  = Math.round(DEEP_BLUE[1] + (COLD_BLUE[1] - DEEP_BLUE[1]) * f);
+              bl = Math.round(DEEP_BLUE[2] + (COLD_BLUE[2] - DEEP_BLUE[2]) * f);
+            } else {
+              const f = (t2 - 0.5) * 2;
+              r  = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
+              g  = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
+              bl = Math.round(COLD_BLUE[2] + (245 - COLD_BLUE[2]) * f);
+            }
           }
           const disp  = Math.abs(avgDz);
-          const alpha = Math.min(0.90, 0.20 + disp * 2.6);
-          const lw    = Math.min(3.0, 0.65 + disp * 5.5);
+          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5);
+          const lw    = Math.min(3.2, 0.65 + disp * 5.5 + avgHeat * 1.8);
           ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
           ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
           ctx.lineWidth = lw; ctx.stroke();
@@ -375,8 +400,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             if (!pr) continue;
             const dz = nodes[i].dz;
             if (dz < 0.18) continue;
+            const h = nodes[i].heat;
             const intensity = Math.min(1, (dz - 0.18) / 0.5);
-            ctx.fillStyle = `rgba(200,220,245,${(intensity * 0.65).toFixed(4)})`;
+            const dotR = h > 0.5 ? 255 : Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * h * 2);
+            const dotG = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.4)) : Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * h * 2);
+            const dotB = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.8)) : Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * h * 2);
+            ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${(Math.max(intensity, h) * 0.8).toFixed(4)})`;
             ctx.beginPath(); ctx.arc(pr.sx, pr.sy, intensity * 2.8, 0, Math.PI * 2); ctx.fill();
           }
         }
