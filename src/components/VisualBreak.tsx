@@ -2,6 +2,7 @@ import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
 import leftImage  from "@/assets/visual-break-left.png";
 import rightImage from "@/assets/visual-break-right.png";
+import { ParticleImageOverlay } from "@/components/ParticleImageOverlay";
 
 const VisualBreak = () => {
   const ref = useRef<HTMLDivElement>(null);
@@ -34,7 +35,7 @@ const VisualBreak = () => {
             variants={itemVariants}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
-            className="overflow-hidden aspect-square"
+            className="overflow-hidden aspect-square relative"
           >
             <img
               src={src}
@@ -43,6 +44,7 @@ const VisualBreak = () => {
               loading="lazy"
               decoding="async"
             />
+            {i === 0 && <ParticleImageOverlay imageSrc={src} />}
           </motion.figure>
         ))}
       </div>
