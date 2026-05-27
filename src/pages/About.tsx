@@ -57,7 +57,7 @@ const About = () => {
                     src={aboutImage}
                     alt="Industrial Magic studio"
                     className="w-full object-cover"
-                    style={{ height: "110%", marginTop: "-5%" }}
+                    style={{ height: "calc(100% + 3cm)", marginTop: "-2cm" }}
                     loading="lazy"
                   />
                 </div>
