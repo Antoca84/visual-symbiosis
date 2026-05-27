@@ -281,10 +281,10 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           if (!pr) continue;
           const dx = pr.sx - mX, dy = pr.sy - mY;
           const md = Math.sqrt(dx * dx + dy * dy);
-          if (md < 160) {
-            const str = (1 - md / 160) ** 2 * 0.018;
-            nodes[i].vz += str * 1.0;
-            nodes[i].dz = Math.min(nodes[i].dz, 0.38); // cap below warm-color threshold
+          if (md < 170) {
+            const str = (1 - md / 170) ** 2 * 0.024;
+            nodes[i].vz += str * 1.6;
+            nodes[i].dz = Math.min(nodes[i].dz, 0.38);
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
         }

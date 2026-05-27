@@ -24,8 +24,8 @@ const HeroSection = () => {
 
       {/* Studio name with subtle cinematic focus-based reveal */}
       <div className="relative z-10 px-6 md:px-12 w-full">
-        <div className="border-l border-foreground/20 pl-4 md:pl-6 inline-block mb-4 md:mb-6">
-          <span className="text-[10px] tracking-[0.4em] uppercase text-foreground/30">
+        <div className="border-l border-foreground/20 pl-4 md:pl-6 inline-block mb-3 md:mb-4">
+          <span className="text-[9px] tracking-[0.35em] uppercase text-foreground/25">
             Visual Laboratory
           </span>
         </div>
