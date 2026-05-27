@@ -291,7 +291,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             nodes[i].vz += str * 1.6;
             nodes[i].dz = Math.min(nodes[i].dz, 0.42);
             // Inject heat — center gets max heat, edge gets less
-            nodes[i].heat = Math.min(1, nodes[i].heat + proximity * 0.18);
+            nodes[i].heat = Math.min(1, nodes[i].heat + proximity * 0.11);
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
         }
