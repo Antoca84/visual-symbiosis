@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import Navigation from "@/components/Navigation";
 import ScrollReveal from "@/components/ScrollReveal";
-import aboutImage from "@/assets/about-studio.jpg";
+import aboutImage from "@/assets/about-studio.png";
 
 const About = () => {
   return (
