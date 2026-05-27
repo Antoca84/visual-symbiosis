@@ -117,20 +117,44 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       await document.fonts.ready;
       if (!W || !H) return;
 
-      const FL = Math.min(W, H) * 0.36;
+      const FL  = Math.min(W, H) * 0.36;
+      const mob = isMobile();
 
-      // Read exact layout from the DOM to guarantee alignment
       const h1El = document.querySelector("h1");
       if (!h1El) return;
-      const h1Rect = h1El.getBoundingClientRect();
-      const cs = getComputedStyle(h1El);
-      const fontSize   = parseFloat(cs.fontSize);
+      const cs         = getComputedStyle(h1El);
       const fontFamily = cs.fontFamily;
-      const lineHeight = fontSize * 0.85;         // leading-[0.85]
-      const padLeft    = h1Rect.left;
-      // Baseline = top of line box + ascender (≈78% of font-size for common serifs)
-      const industrial_y = h1Rect.top + fontSize * 0.78;
-      const magic_y      = industrial_y + lineHeight;
+      const ls         = parseFloat(cs.letterSpacing);
+
+      let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
+
+      if (mob) {
+        // Mobile: upscale font 2.2× for sampling only → denser pixel coverage
+        // keeps world-space targets near where the actual h1 appears
+        const actualFontSize = parseFloat(cs.fontSize);
+        fontSize = Math.min(W * 0.22, actualFontSize * 2.6);
+        const h1Rect = h1El.getBoundingClientRect();
+        padLeft = h1Rect.left;
+        // Scale baselines from actual h1 position using the ratio
+        const scale = fontSize / actualFontSize;
+        const actualIndustrialY = h1Rect.top + actualFontSize * 0.78;
+        const actualMagicY      = actualIndustrialY + actualFontSize * 0.85;
+        // Keep same anchor (magic_y) but render larger text upward from it
+        magic_y      = actualMagicY;
+        industrial_y = magic_y - fontSize * 0.85;
+        // Clamp so text stays on canvas
+        if (industrial_y < fontSize) {
+          magic_y      += fontSize - industrial_y;
+          industrial_y  = fontSize;
+        }
+      } else {
+        // Desktop: exact DOM positions
+        const h1Rect = h1El.getBoundingClientRect();
+        fontSize     = parseFloat(cs.fontSize);
+        padLeft      = h1Rect.left;
+        industrial_y = h1Rect.top + fontSize * 0.78;
+        magic_y      = industrial_y + fontSize * 0.85;
+      }
 
       const tc = document.createElement("canvas");
       tc.width = W; tc.height = H;
@@ -139,13 +163,14 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       tCtx.font = `${fontSize}px ${fontFamily}`;
       tCtx.textAlign = "left";
       tCtx.textBaseline = "alphabetic";
-      const ls = parseFloat(cs.letterSpacing);
       if ("letterSpacing" in tCtx)
-        (tCtx as unknown as Record<string,string>).letterSpacing = `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
+        (tCtx as unknown as Record<string,string>).letterSpacing =
+          `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
       tCtx.fillText("Industrial", padLeft, industrial_y);
       tCtx.fillText("Magic",      padLeft, magic_y);
 
-      const stride = 5;
+      // Mobile stride smaller to compensate for partially larger font on smaller canvas
+      const stride = mob ? 3 : 5;
       const imgData = tCtx.getImageData(0, 0, W, H);
       const pix = imgData.data;
       const candidates: Array<{ wx: number; wy: number }> = [];
@@ -301,7 +326,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
         } else if (phase === "letter") {
           const target = n.letterTarget;
-          if (!isMobile() && target && letterSampled) {
+          if (target && letterSampled) {
             const localT = Math.max(0, (phaseT - n.letterDelay) / Math.max(0.01, 1 - n.letterDelay));
             if (localT > 0) {
               const force = localT * localT * 0.14;
