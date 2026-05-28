@@ -3,6 +3,7 @@ import { useRef } from "react";
 import leftImage  from "@/assets/visual-break-left.png";
 import rightImage from "@/assets/visual-break-right.png";
 import { ParticleImageOverlay } from "@/components/ParticleImageOverlay";
+import { TriangularWaveOverlay } from "@/components/TriangularWaveOverlay";
 
 const VisualBreak = () => {
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +46,7 @@ const VisualBreak = () => {
               decoding="async"
             />
             {i === 0 && <ParticleImageOverlay imageSrc={src} />}
+            {i === 1 && <TriangularWaveOverlay imageSrc={src} />}
           </motion.figure>
         ))}
       </div>
