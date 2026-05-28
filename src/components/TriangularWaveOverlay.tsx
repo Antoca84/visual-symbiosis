@@ -23,88 +23,104 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    // Two dominant colors split at luma median
-    let col1: [number, number, number] = [18, 18, 28];
-    let col2: [number, number, number] = [185, 195, 215];
+    // ── Noise ─────────────────────────────────────────────────────────────────
+    const _h = (n: number) => { const x = Math.sin(n) * 43758.5453; return x - Math.floor(x); };
+    const n2 = (x: number, y: number) => {
+      const ix = Math.floor(x), iy = Math.floor(y), fx = x-ix, fy = y-iy;
+      const ux = fx*fx*(3-2*fx), uy = fy*fy*(3-2*fy);
+      const h = (a: number, b: number) => _h(a + b*57.3);
+      return (h(ix,iy)*(1-ux)+h(ix+1,iy)*ux)*(1-uy)+(h(ix,iy+1)*(1-ux)+h(ix+1,iy+1)*ux)*uy;
+    };
+    const fbm = (x: number, y: number) =>
+      n2(x,y)*0.500 + n2(x*2.1,y*2.1)*0.250 + n2(x*4.3,y*4.3)*0.125;
+
+    const MOB = window.innerWidth < 768;
+    const STRIP_H  = MOB ? 6 : 3;   // px per strip
+    const MAX_DISP = MOB ? 3 : 7;   // max horizontal displacement px
+    const CHROMA   = MOB ? 1.5 : 3.5; // max channel separation px
+
+    // Source image canvas + isolated R / B channel canvases
+    let srcC: HTMLCanvasElement | null = null;
+    let redC: HTMLCanvasElement | null = null;
+    let bluC: HTMLCanvasElement | null = null;
 
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      const RES = 64;
-      const tc = document.createElement("canvas");
-      tc.width = RES; tc.height = RES;
-      const tCtx = tc.getContext("2d")!;
-      tCtx.drawImage(img, 0, 0, RES, RES);
-      const data = tCtx.getImageData(0, 0, RES, RES).data;
+      const IW = Math.min(img.width, 900);
+      const IH = Math.round(img.height * IW / img.width);
 
-      const lumas: number[] = [];
-      for (let i = 0; i < RES * RES; i++)
-        lumas.push(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]);
-      lumas.sort((a, b) => a - b);
-      const median = lumas[Math.floor(lumas.length / 2)];
+      const makeCanvas = () => {
+        const c = document.createElement("canvas");
+        c.width = IW; c.height = IH;
+        return c;
+      };
 
-      let r1=0,g1=0,b1=0,c1=0, r2=0,g2=0,b2=0,c2=0;
-      for (let i = 0; i < RES * RES; i++) {
-        const l = 0.299*data[i*4] + 0.587*data[i*4+1] + 0.114*data[i*4+2];
-        if (l < median) { r1+=data[i*4]; g1+=data[i*4+1]; b1+=data[i*4+2]; c1++; }
-        else            { r2+=data[i*4]; g2+=data[i*4+1]; b2+=data[i*4+2]; c2++; }
-      }
-      if (c1 > 0) col1 = [Math.round(r1/c1), Math.round(g1/c1), Math.round(b1/c1)];
-      if (c2 > 0) col2 = [Math.round(r2/c2), Math.round(g2/c2), Math.round(b2/c2)];
+      srcC = makeCanvas();
+      srcC.getContext("2d")!.drawImage(img, 0, 0, IW, IH);
+
+      // Red channel (zero G and B)
+      redC = makeCanvas();
+      const rCtx = redC.getContext("2d")!;
+      rCtx.drawImage(img, 0, 0, IW, IH);
+      const rData = rCtx.getImageData(0, 0, IW, IH);
+      for (let i = 0; i < rData.data.length; i += 4) { rData.data[i+1] = 0; rData.data[i+2] = 0; }
+      rCtx.putImageData(rData, 0, 0);
+
+      // Blue channel (zero R and G)
+      bluC = makeCanvas();
+      const bCtx = bluC.getContext("2d")!;
+      bCtx.drawImage(img, 0, 0, IW, IH);
+      const bData = bCtx.getImageData(0, 0, IW, IH);
+      for (let i = 0; i < bData.data.length; i += 4) { bData.data[i] = 0; bData.data[i+1] = 0; }
+      bCtx.putImageData(bData, 0, 0);
     };
     img.src = imageSrc;
-
-    // Offscreen buffer — low-res, upscaled with smoothing
-    const BUF = 96;
-    const wc   = document.createElement("canvas");
-    wc.width = BUF; wc.height = BUF;
-    const wCtx  = wc.getContext("2d")!;
-    const frame = wCtx.createImageData(BUF, BUF);
-    const d     = frame.data;
-
-    // 45° chevron constants
-    const COS = Math.SQRT1_2; // cos(45°)
-    const SIN = Math.SQRT1_2; // sin(45°)
-    const FREQ    = 7;   // stripes visible across diagonal
-    const SPEED   = 0.14; // wave advance per second (in stripe units)
-    const FEATHER = 0.015; // soft edge half-width (fraction of stripe)
 
     let t = 0;
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.008;
+      if (!srcC) return;
+      t += 0.006;
 
-      for (let py = 0; py < BUF; py++) {
-        for (let px = 0; px < BUF; px++) {
-          const nx = px / BUF;
-          const ny = py / BUF;
-
-          // Diagonal projection → triangle wave → two-color stripe
-          const proj  = nx * COS + ny * SIN;
-          const phase = ((proj * FREQ - t * SPEED) % 1 + 1) % 1;
-          const tri   = phase < 0.5 ? phase * 2 : (1 - phase) * 2; // 0–1 triangle wave
-
-          // Soft threshold at 0.5
-          const f = Math.max(0, Math.min(1, (tri - (0.5 - FEATHER)) / (2 * FEATHER)));
-
-          const r = Math.round(col1[0] + (col2[0] - col1[0]) * f);
-          const g = Math.round(col1[1] + (col2[1] - col1[1]) * f);
-          const b = Math.round(col1[2] + (col2[2] - col1[2]) * f);
-
-          const idx = (py * BUF + px) * 4;
-          d[idx] = r; d[idx + 1] = g; d[idx + 2] = b; d[idx + 3] = 255;
-        }
-      }
-
-      wCtx.putImageData(frame, 0, 0);
       ctx.clearRect(0, 0, W, H);
+
+      // ── Heat distortion: horizontal strip displacement ─────────────────────
       ctx.globalCompositeOperation = "source-over";
+      ctx.globalAlpha = 1;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.globalAlpha = 0.40;
-      ctx.drawImage(wc, 0, 0, W, H);
+
+      const numStrips = Math.ceil(H / STRIP_H);
+      const srcH = srcC.height, srcW = srcC.width;
+
+      for (let i = 0; i < numStrips; i++) {
+        const destY = i * STRIP_H;
+        const destH = Math.min(STRIP_H + 1, H - destY); // +1 closes inter-strip gap
+        const ny = destY / H;
+        // Two-octave displacement: slow large wave + faster small ripple
+        const disp = (fbm(ny * 1.8 + t * 0.22, t * 0.14) - 0.5) * 2 * MAX_DISP
+                   + (fbm(ny * 5.1 + 3.7, t * 0.38 + 9.2) - 0.5) * 2 * MAX_DISP * 0.28;
+        const srcY0 = Math.round(ny * srcH);
+        const srcH0 = Math.max(1, Math.round(destH / H * srcH));
+        ctx.drawImage(srcC, 0, srcY0, srcW, srcH0, disp, destY, W, destH);
+      }
+
+      // ── Chromatic aberration: R shifted right, B shifted left ──────────────
+      if (redC && bluC) {
+        const cx = Math.sin(t * 0.31) * CHROMA;
+        const cy = Math.cos(t * 0.24) * CHROMA * 0.35;
+
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(redC,  cx,  cy, W, H);
+        ctx.globalAlpha = 0.28;
+        ctx.drawImage(bluC, -cx, -cy, W, H);
+      }
+
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
     };
 
     rafRef.current = requestAnimationFrame(draw);
@@ -115,7 +131,6 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ mixBlendMode: "overlay" }}
     />
   );
 }
