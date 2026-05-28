@@ -87,22 +87,35 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
       hash(x * 127.1 + y * 311.7 + t * 74.3);
 
     // ── Spawn ────────────────────────────────────────────────────────────────
-    const COUNT = window.innerWidth < 768 ? 80 : 520;
+    const MOB = window.innerWidth < 768;
+    const COUNT = MOB ? 80 : 520;
 
     const spawn = (): Particle => {
       let nx = Math.random(), ny = Math.random(), luma = 0.5;
       for (let k = 0; k < 10; k++) {
-        const tx = Math.random(), ty = Math.random();
+        // Desktop: sample within central 70% so flow radiates outward from image core
+        const tx = MOB ? Math.random() : 0.5 + (Math.random() - 0.5) * 0.70;
+        const ty = MOB ? Math.random() : 0.5 + (Math.random() - 0.5) * 0.70;
         const tl = sampleLuma(tx, ty);
         if (Math.random() < tl * tl * 1.6) { nx = tx; ny = ty; luma = tl; break; }
         if (k === 9) { nx = tx; ny = ty; luma = sampleLuma(tx, ty); }
       }
       const [sr, sg, sb] = sampleColor(nx, ny);
       const maxLife = 80 + Math.random() * 100;
+      // Desktop: initial velocity radially outward from center
+      let vx0: number, vy0: number;
+      if (MOB) {
+        vx0 = (Math.random() - 0.5) * 0.35;
+        vy0 = -(0.12 + Math.random() * 0.32);
+      } else {
+        const angle = Math.atan2(ny - 0.5, nx - 0.5);
+        const speed = 0.08 + Math.random() * 0.18;
+        vx0 = Math.cos(angle) * speed;
+        vy0 = Math.sin(angle) * speed;
+      }
       return {
         x: nx * W, y: ny * H,
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: -(0.12 + Math.random() * 0.32),
+        vx: vx0, vy: vy0,
         life: Math.random() * maxLife * 0.6,
         maxLife,
         size: 0.5 + luma * 1.6,
@@ -118,7 +131,7 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
     let t = 0;
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.005;
+      t += MOB ? 0.0035 : 0.005;
 
       // Fade trails to black
       ctx.globalCompositeOperation = "source-over";
@@ -133,6 +146,14 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
         p.life++;
         p.vx += (noise(p.x * 0.007, p.y * 0.007, t) - 0.5) * 0.028;
         p.vy += (noise(p.x * 0.007 + 80, p.y * 0.007 + 80, t) - 0.5) * 0.012;
+        // Desktop: centrifugal push from center, scaled by local luminance (bright/thick lines = faster)
+        if (!MOB) {
+          const luma = sampleLuma(p.x / W, p.y / H);
+          const cx = p.x / W - 0.5, cy = p.y / H - 0.5;
+          const cLen = Math.sqrt(cx * cx + cy * cy) + 0.01;
+          p.vx += (cx / cLen) * 0.0032 * (0.25 + luma * 0.85);
+          p.vy += (cy / cLen) * 0.0032 * (0.25 + luma * 0.85);
+        }
         p.vx *= 0.96; p.vy *= 0.97;
         p.x += p.vx; p.y += p.vy;
 
@@ -149,9 +170,9 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
         ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
 
-        // Soft glow halo — larger particles get 20% less glow
+        // Soft glow halo — larger particles get 20% less glow; mobile glow halved
         const sizeNorm = (p.size - 0.5) / 1.6;
-        ctx.globalAlpha = alpha * 0.10 * (1 - sizeNorm * 0.20);
+        ctx.globalAlpha = alpha * (MOB ? 0.05 : 0.10) * (1 - sizeNorm * 0.20);
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size * 5.5, 0, Math.PI * 2); ctx.fill();
       }
 
