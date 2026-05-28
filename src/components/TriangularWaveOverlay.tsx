@@ -98,10 +98,13 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
       }
 
       wCtx.putImageData(frame, 0, 0);
+      ctx.clearRect(0, 0, W, H);
       ctx.globalCompositeOperation = "source-over";
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
+      ctx.globalAlpha = 0.40;
       ctx.drawImage(wc, 0, 0, W, H);
+      ctx.globalAlpha = 1;
     };
 
     rafRef.current = requestAnimationFrame(draw);
@@ -112,6 +115,7 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ mixBlendMode: "overlay" }}
     />
   );
 }
