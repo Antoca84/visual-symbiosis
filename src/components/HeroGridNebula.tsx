@@ -206,18 +206,38 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
-    // iOS classifies scroll vs. interact at touchstart — preventDefault must fire there.
-    // During grid/dissolve the canvas captures all touch (touch-action:none set below).
-    const isInteractive = () => phaseRef.current === "grid" || phaseRef.current === "dissolve";
+    // iOS decides scroll vs. interact at touchstart — preventDefault must fire there.
+    // We only capture touches that START inside the projected grid bounds.
+    let touchCaptured = false;
+
+    const isOnGrid = (clientX: number, clientY: number): boolean => {
+      if (phaseRef.current !== "grid" && phaseRef.current !== "dissolve") return false;
+      const FL = Math.min(W, H) * 0.36;
+      const currentProjCenterY = window.innerWidth < 768 ? H * 0.40 : H * 0.46;
+      const halfW = SPAN_X * (FL / CAM_DIST) + 70;
+      const halfH = SPAN_Y * (FL / CAM_DIST) * yScale + 70;
+      const r = canvas.getBoundingClientRect();
+      const px = clientX - r.left;
+      const py = clientY - r.top;
+      return Math.abs(px - W * 0.5) < halfW && Math.abs(py - currentProjCenterY) < halfH;
+    };
+
     canvas.addEventListener("touchstart", (e) => {
-      if (isInteractive()) e.preventDefault();
+      const touch = e.touches[0];
+      touchCaptured = isOnGrid(touch.clientX, touch.clientY);
+      if (touchCaptured) {
+        mouseRef.current = getCanvasPos(touch.clientX, touch.clientY);
+        e.preventDefault();
+      }
     }, { passive: false });
     canvas.addEventListener("touchmove", (e) => {
-      const t = e.touches[0];
-      mouseRef.current = getCanvasPos(t.clientX, t.clientY);
-      if (isInteractive()) e.preventDefault();
+      const touch = e.touches[0];
+      if (touchCaptured) {
+        mouseRef.current = getCanvasPos(touch.clientX, touch.clientY);
+        e.preventDefault();
+      }
     }, { passive: false });
-    canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
+    canvas.addEventListener("touchend", () => { touchCaptured = false; mouseRef.current = { x: -9999, y: -9999 }; });
 
     // Water offscreen buffer
     const WW = isMobile() ? 120 : 240, WH = isMobile() ? 68 : 135;
@@ -293,12 +313,6 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const phase: "float" | "letter" | "converge" | "grid" | "dissolve" =
         rawPhase === "grid" && dissolveTriggered ? "dissolve" : rawPhase;
       phaseRef.current = phase;
-
-      // Block browser scroll during interactive phases via CSS property
-      const interactive = phase === "grid" || phase === "dissolve";
-      if (canvas.style.touchAction !== (interactive ? "none" : "")) {
-        canvas.style.touchAction = interactive ? "none" : "";
-      }
 
       const dissolveElapsed = dissolveTriggered && dissolveStartTs !== null
         ? (ts - dissolveStartTs) / 1000 : 0;
