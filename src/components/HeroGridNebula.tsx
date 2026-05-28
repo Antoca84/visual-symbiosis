@@ -48,6 +48,8 @@ interface Node {
   letterDelay: number;
   locked: boolean;
   tier: 0 | 1 | 2;
+  burnCount: number;
+  wasHot: boolean;
 }
 
 function makeNodes(): Node[] {
@@ -73,6 +75,8 @@ function makeNodes(): Node[] {
       letterDelay: Math.random() * 0.35,
       locked: false,
       tier: roll < 0.76 ? 0 : roll < 0.93 ? 1 : 2,
+      burnCount: 0,
+      wasHot: false,
     };
   });
 }
@@ -99,6 +103,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     let W = 0, H = 0;
     const nodes = nodesRef.current;
     let letterSampled = false;
+
+    // Dissolve state (closure vars, reset on restart)
+    let dissolveTriggered = false;
+    let dissolveStartTs: number | null = null;
+    let sustainedHeatFrames = 0;
 
     const isMobile = () => window.innerWidth < 768;
     const MOB    = isMobile();
@@ -197,9 +206,14 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
     canvas.addEventListener("touchmove", (e) => {
-      const t = e.touches[0];
-      mouseRef.current = getCanvasPos(t.clientX, t.clientY);
-      if (phaseRef.current === "grid") e.preventDefault(); // prevent scroll only during grid interaction
+      const touch = e.touches[0];
+      const pos = getCanvasPos(touch.clientX, touch.clientY);
+      mouseRef.current = pos;
+      if (phaseRef.current === "grid") {
+        // Only block scroll when touch is within the grid projection area (+ 80px margin)
+        const gridHalfH = SPAN_Y * (Math.min(W, H) * 0.36 / CAM_DIST) * yScale;
+        if (Math.abs(pos.y - projCenterY) < gridHalfH + 80) e.preventDefault();
+      }
     }, { passive: false });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
@@ -270,11 +284,16 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       tRef.current += 0.011;
       const t = tRef.current;
 
-      const phase: "float" | "letter" | "converge" | "grid" =
+      const rawPhase: "float" | "letter" | "converge" | "grid" =
         elapsed < P1                   ? "float"    :
         elapsed < P1 + P_LETTER        ? "letter"   :
         elapsed < P1 + P_LETTER + P2   ? "converge" : "grid";
+      const phase: "float" | "letter" | "converge" | "grid" | "dissolve" =
+        rawPhase === "grid" && dissolveTriggered ? "dissolve" : rawPhase;
       phaseRef.current = phase;
+
+      const dissolveElapsed = dissolveTriggered && dissolveStartTs !== null
+        ? (ts - dissolveStartTs) / 1000 : 0;
 
       const phaseT =
         phase === "letter"   ? Math.min(1, (elapsed - P1) / P_LETTER) :
@@ -284,7 +303,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       // ── Clear ────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
-      const clearAlpha = phase === "grid" ? 0.92 : phase === "letter" ? 0.18 : 0.11;
+      const clearAlpha = phase === "dissolve" ? 0.055 :
+                         phase === "grid"     ? 0.92  :
+                         phase === "letter"   ? 0.18  : 0.11;
       ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${clearAlpha})`;
       ctx.fillRect(0, 0, W, H);
 
@@ -374,8 +395,21 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.vx *= DAMP; n.vy *= DAMP; n.vz *= DAMP;
           n.dx += n.vx; n.dy += n.vy; n.dz += n.vz;
           n.heat *= 0.964;
+
+        } else if (phase === "dissolve") {
+          // Nodes fly outward from their grid rest position
+          const ddx = n.x - n.rx, ddy = n.y - n.ry;
+          const dist = Math.sqrt(ddx * ddx + ddy * ddy + n.z * n.z) + 0.01;
+          const outF = 0.006 * (1 + (n.burnCount >= 3 ? 2.2 : 0));
+          n.vx += (ddx / dist) * outF + (fbm2(n.x * 0.4 + t * 0.3, n.y * 0.4 + 1.1) - 0.5) * 0.018;
+          n.vy += (ddy / dist) * outF + (fbm2(n.y * 0.4 + 2.1, n.z * 0.4 + t * 0.25) - 0.5) * 0.018;
+          n.vz += (n.z / dist) * outF * 0.5 + (fbm2(n.z * 0.3 + t * 0.2, n.x * 0.3 + 4.1) - 0.5) * 0.012;
+          n.vx *= 0.988; n.vy *= 0.988; n.vz *= 0.988;
+          n.x += n.vx; n.y += n.vy; n.z += n.vz;
+          n.heat *= 0.982;
         }
       }
+
 
       // ── Project all ───────────────────────────────────────────────────────────
       for (let i = 0; i < N_NODES; i++) {
@@ -398,6 +432,66 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             nodes[i].heat = Math.min(1, nodes[i].heat + proximity * 0.11);
             if (md > 1) { nodes[i].vx += (dx / md) * str * 0.18; nodes[i].vy -= (dy / md) * str * 0.18; }
           }
+        }
+      }
+
+      // ── Burn tracking + dissolve trigger ─────────────────────────────────────
+      if (rawPhase === "grid" && !dissolveTriggered) {
+        let hotNodeCount = 0;
+        for (let i = 0; i < N_NODES; i++) {
+          const n = nodes[i];
+          if (n.heat > 0.85) {
+            if (!n.wasHot) { n.burnCount++; n.wasHot = true; }
+            hotNodeCount++;
+          } else if (n.heat < 0.30) {
+            n.wasHot = false;
+          }
+        }
+        if (hotNodeCount > 2) sustainedHeatFrames++;
+        else sustainedHeatFrames = Math.max(0, sustainedHeatFrames - 2);
+
+        let maxBurn = 0;
+        for (let i = 0; i < N_NODES; i++) maxBurn = Math.max(maxBurn, nodes[i].burnCount);
+
+        if (maxBurn >= 3 || sustainedHeatFrames >= 180) {
+          dissolveTriggered = true;
+          dissolveStartTs = ts;
+          for (const n of nodes) {
+            const strength = 0.06 + (n.burnCount >= 3 ? 0.38 : 0);
+            const angle = Math.random() * Math.PI * 2;
+            n.vx += Math.cos(angle) * strength;
+            n.vy += (0.08 + Math.random() * 0.14) * strength * 3.5;
+            n.vz += (Math.random() - 0.5) * strength;
+            n.locked = false;
+          }
+        }
+      }
+
+      // ── Dissolve → reset to converge when 60% scattered ──────────────────────
+      if (phase === "dissolve") {
+        let dissolvedCount = 0;
+        for (const n of nodes) {
+          if (Math.hypot(n.x - n.rx, n.y - n.ry) > 1.8) dissolvedCount++;
+        }
+        if (dissolvedCount / N_NODES >= 0.6) {
+          dissolveTriggered = false;
+          dissolveStartTs = null;
+          sustainedHeatFrames = 0;
+          for (const n of nodes) {
+            const rad = Math.cbrt(Math.random()) * 2.4;
+            const θ = Math.random() * Math.PI * 2;
+            const φ = Math.acos(2 * Math.random() - 1);
+            n.x = rad * Math.sin(φ) * Math.cos(θ);
+            n.y = rad * Math.sin(φ) * Math.sin(θ);
+            n.z = (Math.random() - 0.5) * 2.5;
+            n.vx = (Math.random() - 0.5) * 0.04;
+            n.vy = (Math.random() - 0.5) * 0.04;
+            n.vz = (Math.random() - 0.5) * 0.03;
+            n.locked = false; n.heat = 0;
+            n.dx = 0; n.dy = 0; n.dz = 0;
+            n.burnCount = 0; n.wasHot = false;
+          }
+          startRef.current = ts - (P1 + P_LETTER + 0.05) * 1000; // jump to converge start
         }
       }
 
@@ -428,15 +522,24 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             b = Math.round(COLD_BLUE[2] + (BONE[2] - COLD_BLUE[2]) * f);
           }
 
+          // Dissolve: burned nodes glow arterial red/orange
+          if (phase === "dissolve" && n.burnCount >= 3) {
+            const heatNorm = Math.max(0, n.heat);
+            r = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * heatNorm * 0.6);
+            g = Math.round(ARTERIAL[1] * (1 - heatNorm * 0.5));
+            b = Math.round(ARTERIAL[2] * (1 - heatNorm * 0.7));
+          }
+
           // Nodes near their letter target glow slightly brighter
           let brightBoost = 1;
           if (phase === "letter" && n.letterTarget) {
             const dist = Math.hypot(n.x - n.letterTarget.wx, n.y - n.letterTarget.wy);
             brightBoost = dist < 0.25 ? 1.0 + (1 - dist / 0.25) * 1.4 : 1;
           }
+          if (phase === "dissolve") brightBoost = 1.0 + n.heat * 1.2;
 
           const [baseSize, baseAlpha] = n.tier === 2 ? [0.014, 0.92] : n.tier === 1 ? [0.007, 0.58] : [0.003, 0.32];
-          const sz = Math.max(0.2, s * baseSize * (phase === "letter" ? 1.1 : 1));
+          const sz = Math.max(0.2, s * baseSize * (phase === "letter" ? 1.1 : phase === "dissolve" ? 1.3 : 1));
           const alpha = Math.min(1, baseAlpha * depthT * brightBoost);
           if (alpha < 0.02) continue;
 
@@ -447,8 +550,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
-      // --- Grid lines (locked nodes during converge, all during grid) ---
-      if (phase === "converge" || phase === "grid") {
+      // --- Grid lines (locked nodes during converge, all during grid/early dissolve) ---
+      const dissolveLineFade = phase === "dissolve" ? Math.max(0, 1 - dissolveElapsed / 0.8) : 1;
+      if (phase === "converge" || phase === "grid" || (phase === "dissolve" && dissolveLineFade > 0)) {
         ctx.lineCap = "round"; ctx.lineJoin = "round";
 
         const drawSeg = (i: number, j: number) => {
@@ -487,7 +591,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             }
           }
           const disp  = Math.abs(avgDz);
-          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5);
+          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5) * dissolveLineFade;
+          if (alpha < 0.01) return;
           const lw    = Math.min(3.2, 0.65 + disp * 5.5 + avgHeat * 1.8);
           ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
           ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
