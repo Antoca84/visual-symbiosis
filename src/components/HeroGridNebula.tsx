@@ -89,6 +89,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
   const nodesRef   = useRef<Node[]>(makeNodes());
   const startRef   = useRef<number | null>(null);
   const waterRef   = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; data: ImageData } | null>(null);
+  const phaseRef   = useRef<string>("float");
 
   useEffect(() => scrollYProgress.on("change", v => { scrollRef.current = v; }), [scrollYProgress]);
 
@@ -135,24 +136,13 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const ls             = parseFloat(cs.letterSpacing) || 0;
       const actualFontSize = parseFloat(cs.fontSize) || (MOB ? 48 : 160);
 
-      let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
-
-      if (MOB) {
-        // Mobile: section uses h-svh (= visual viewport) + items-center.
-        // h1 "Magic" baseline lands at ~54% of svh height.
-        // projCenterY = H*0.40 → wy ≈ -1.7 world units → reachable by float sphere.
-        fontSize     = Math.min(W * 0.22, actualFontSize * 2.6);  // upscale for pixel density
-        magic_y      = H * 0.54;
-        industrial_y = magic_y - fontSize * 0.85;
-        padLeft      = W * 0.064;          // matches px-6
-      } else {
-        // Desktop: read exact positions from DOM
-        const h1Rect = h1El.getBoundingClientRect();
-        fontSize     = actualFontSize;
-        padLeft      = h1Rect.left;
-        industrial_y = h1Rect.top + actualFontSize * 0.78;
-        magic_y      = industrial_y + actualFontSize * 0.85;
-      }
+      // DOM coords: with h-svh, canvas height = visual viewport = window.innerHeight.
+      // getBoundingClientRect() is in visual viewport space = canvas space. Works on both.
+      const h1Rect     = h1El.getBoundingClientRect();
+      const fontSize   = actualFontSize;
+      const padLeft    = h1Rect.left;
+      const industrial_y = h1Rect.top + actualFontSize * 0.78;
+      const magic_y      = industrial_y + actualFontSize * 0.85;
 
       const tc = document.createElement("canvas");
       tc.width = W; tc.height = H;
@@ -209,7 +199,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     canvas.addEventListener("touchmove", (e) => {
       const t = e.touches[0];
       mouseRef.current = getCanvasPos(t.clientX, t.clientY);
-    }, { passive: true });
+      if (phaseRef.current === "grid") e.preventDefault(); // prevent scroll only during grid interaction
+    }, { passive: false });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
     // Water offscreen buffer
@@ -283,6 +274,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         elapsed < P1                   ? "float"    :
         elapsed < P1 + P_LETTER        ? "letter"   :
         elapsed < P1 + P_LETTER + P2   ? "converge" : "grid";
+      phaseRef.current = phase;
 
       const phaseT =
         phase === "letter"   ? Math.min(1, (elapsed - P1) / P_LETTER) :
