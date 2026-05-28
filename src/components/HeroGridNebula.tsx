@@ -108,6 +108,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     let dissolveTriggered = false;
     let dissolveStartTs: number | null = null;
     let sustainedHeatFrames = 0;
+    let gridEntryTs: number | null = null;
+    let idleFrames = 0;
 
     const isMobile = () => window.innerWidth < 768;
     const MOB    = isMobile();
@@ -314,6 +316,11 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         rawPhase === "grid" && dissolveTriggered ? "dissolve" : rawPhase;
       phaseRef.current = phase;
 
+      // Track when grid phase first begins (reset on dissolve cycle)
+      if (rawPhase === "grid" && !dissolveTriggered && gridEntryTs === null) gridEntryTs = ts;
+      if (dissolveTriggered) gridEntryTs = null;
+      const gridAge = gridEntryTs !== null ? (ts - gridEntryTs) / 1000 : 0;
+
       const dissolveElapsed = dissolveTriggered && dissolveStartTs !== null
         ? (ts - dissolveStartTs) / 1000 : 0;
 
@@ -326,7 +333,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // ── Clear ────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
       const clearAlpha = phase === "dissolve" ? 0.055 :
-                         phase === "grid"     ? 0.92  :
+                         phase === "grid"     ? 0.18 + 0.74 * Math.min(1, gridAge / 1.5) :
                          phase === "letter"   ? 0.18  : 0.11;
       ctx.fillStyle = `rgba(${BG[0]},${BG[1]},${BG[2]},${clearAlpha})`;
       ctx.fillRect(0, 0, W, H);
@@ -517,6 +524,19 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
+      // ── Idle wave ─────────────────────────────────────────────────────────────
+      // mX is -9999 when no pointer; reset idle when pointer is inside canvas.
+      if (phase === "grid" && !dissolveTriggered) {
+        if (mX > 0 && mX < W && mY > 0 && mY < H) idleFrames = 0;
+        else idleFrames++;
+      } else {
+        idleFrames = 0;
+      }
+      // Fade in after 2s idle, max amplitude 0.38 (subtle).
+      const waveAmp = phase === "grid" && !dissolveTriggered
+        ? Math.min(1, Math.max(0, idleFrames - 120) / 90) * 0.38
+        : 0;
+
       // ── Draw ──────────────────────────────────────────────────────────────────
       ctx.globalCompositeOperation = "lighter";
 
@@ -613,9 +633,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             }
           }
           const disp  = Math.abs(avgDz);
-          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5) * dissolveLineFade;
+          const avgRx = (ni.rx + nj.rx) * 0.5;
+          const avgRy = (ni.ry + nj.ry) * 0.5;
+          const wave  = waveAmp > 0 ? Math.max(0, Math.sin(avgRx * 1.1 + avgRy * 0.25 - t * 0.75)) * waveAmp : 0;
+          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5 + wave * 0.45) * dissolveLineFade;
           if (alpha < 0.01) return;
-          const lw    = Math.min(3.2, 0.65 + disp * 5.5 + avgHeat * 1.8);
+          const lw    = Math.min(3.2, 0.65 + disp * 5.5 + avgHeat * 1.8 + wave * 0.6);
           ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
           ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
           ctx.lineWidth = lw; ctx.stroke();
@@ -632,15 +655,18 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           for (let i = 0; i < N_NODES; i++) {
             const pr = projCache[i];
             if (!pr) continue;
-            const dz = nodes[i].dz;
-            if (dz < 0.18) continue;
-            const h = nodes[i].heat;
+            const n = nodes[i];
+            const dz = n.dz;
+            const h = n.heat;
+            const waveDot = waveAmp > 0 ? Math.max(0, Math.sin(n.rx * 1.1 + n.ry * 0.25 - t * 0.75)) * waveAmp : 0;
+            if (dz < 0.18 && waveDot < 0.05) continue;
             const intensity = Math.min(1, (dz - 0.18) / 0.5);
             const dotR = h > 0.5 ? 255 : Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * h * 2);
             const dotG = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.4)) : Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * h * 2);
             const dotB = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.8)) : Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * h * 2);
-            ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${(Math.max(intensity, h) * 0.8).toFixed(4)})`;
-            ctx.beginPath(); ctx.arc(pr.sx, pr.sy, intensity * 2.8, 0, Math.PI * 2); ctx.fill();
+            const dotAlpha = Math.max(intensity, h) * 0.8 + waveDot * 0.3;
+            ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${dotAlpha.toFixed(4)})`;
+            ctx.beginPath(); ctx.arc(pr.sx, pr.sy, Math.max(0.4, intensity * 2.8 + waveDot * 1.2), 0, Math.PI * 2); ctx.fill();
           }
         }
       }
