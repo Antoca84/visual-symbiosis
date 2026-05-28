@@ -205,15 +205,17 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     };
     canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
+
+    // iOS decides scroll vs. interact at touchstart — must preventDefault there, not just touchmove.
+    // touch-action:none (set via draw loop) is the CSS-level guard; touchstart is the JS fallback.
+    const isInteractivePhase = () => phaseRef.current === "grid" || phaseRef.current === "dissolve";
+    canvas.addEventListener("touchstart", (e) => {
+      if (isInteractivePhase()) e.preventDefault();
+    }, { passive: false });
     canvas.addEventListener("touchmove", (e) => {
       const touch = e.touches[0];
-      const pos = getCanvasPos(touch.clientX, touch.clientY);
-      mouseRef.current = pos;
-      if (phaseRef.current === "grid") {
-        // Only block scroll when touch is within the grid projection area (+ 80px margin)
-        const gridHalfH = SPAN_Y * (Math.min(W, H) * 0.36 / CAM_DIST) * yScale;
-        if (Math.abs(pos.y - projCenterY) < gridHalfH + 80) e.preventDefault();
-      }
+      mouseRef.current = getCanvasPos(touch.clientX, touch.clientY);
+      if (isInteractivePhase()) e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
@@ -291,6 +293,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const phase: "float" | "letter" | "converge" | "grid" | "dissolve" =
         rawPhase === "grid" && dissolveTriggered ? "dissolve" : rawPhase;
       phaseRef.current = phase;
+
+      // CSS touch-action: block browser scroll classification during interactive phases
+      const wantNone = phase === "grid" || phase === "dissolve";
+      if (canvas.style.touchAction !== (wantNone ? "none" : "")) {
+        canvas.style.touchAction = wantNone ? "none" : "";
+      }
 
       const dissolveElapsed = dissolveTriggered && dissolveStartTs !== null
         ? (ts - dissolveStartTs) / 1000 : 0;
