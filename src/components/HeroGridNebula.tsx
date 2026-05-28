@@ -206,26 +206,16 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
-    // iOS classifies scroll vs. interact at touchstart — must preventDefault there.
-    // Only block when touch starts inside the grid projection area; outside = free scroll.
-    const gridHalfH = () => SPAN_Y * (Math.min(W, H) * 0.36 / CAM_DIST) * yScale;
-    const isOnGrid = (clientX: number, clientY: number) => {
-      if (phaseRef.current !== "grid" && phaseRef.current !== "dissolve") return false;
-      const r = canvas.getBoundingClientRect();
-      const py = clientY - r.top;
-      const px = clientX - r.left;
-      const halfH = gridHalfH();
-      const halfW = SPAN_X * (Math.min(W, H) * 0.36 / CAM_DIST);
-      return Math.abs(py - projCenterY) < halfH + 40 && Math.abs(px - W * 0.5) < halfW + 40;
-    };
+    // iOS classifies scroll vs. interact at touchstart — preventDefault must fire there.
+    // During grid/dissolve the canvas captures all touch (touch-action:none set below).
+    const isInteractive = () => phaseRef.current === "grid" || phaseRef.current === "dissolve";
     canvas.addEventListener("touchstart", (e) => {
-      const t = e.touches[0];
-      if (isOnGrid(t.clientX, t.clientY)) e.preventDefault();
+      if (isInteractive()) e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchmove", (e) => {
       const t = e.touches[0];
       mouseRef.current = getCanvasPos(t.clientX, t.clientY);
-      if (isOnGrid(t.clientX, t.clientY)) e.preventDefault();
+      if (isInteractive()) e.preventDefault();
     }, { passive: false });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
@@ -303,6 +293,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const phase: "float" | "letter" | "converge" | "grid" | "dissolve" =
         rawPhase === "grid" && dissolveTriggered ? "dissolve" : rawPhase;
       phaseRef.current = phase;
+
+      // Block browser scroll during interactive phases via CSS property
+      const interactive = phase === "grid" || phase === "dissolve";
+      if (canvas.style.touchAction !== (interactive ? "none" : "")) {
+        canvas.style.touchAction = interactive ? "none" : "";
+      }
 
       const dissolveElapsed = dissolveTriggered && dissolveStartTs !== null
         ? (ts - dissolveStartTs) / 1000 : 0;
