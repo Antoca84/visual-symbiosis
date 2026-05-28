@@ -115,6 +115,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
+    // Projection vertical center — mobile shifted up so letter formation (H*0.50) sits below center
+    const projCenterY = MOB ? H * 0.40 : H * 0.46;
+
     // Sample "Industrial\nMagic" pixel positions → assign as letter targets to nodes
     const sampleLetterPositions = async () => {
       await document.fonts.ready;
@@ -130,17 +133,18 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       // Fallbacks defend against iOS returning empty/NaN values
       const fontFamily     = cs.fontFamily || "serif";
       const ls             = parseFloat(cs.letterSpacing) || 0;
-      const actualFontSize = parseFloat(cs.fontSize) || (mob ? 48 : 160);
+      const actualFontSize = parseFloat(cs.fontSize) || (MOB ? 48 : 160);
 
       let fontSize: number, padLeft: number, industrial_y: number, magic_y: number;
 
       if (MOB) {
-        // Mobile: position as percentage of H — immune to iOS 100vh / viewport quirks.
-        // h1 sits at ~83% of canvas height (pb-16=64 + tagline≈54 below h1).
-        magic_y      = H * 0.83;
-        industrial_y = magic_y - actualFontSize * 0.85;
-        padLeft      = W * 0.064;          // matches px-6
+        // Mobile: section uses h-svh (= visual viewport) + items-center.
+        // h1 "Magic" baseline lands at ~54% of svh height.
+        // projCenterY = H*0.40 → wy ≈ -1.7 world units → reachable by float sphere.
         fontSize     = Math.min(W * 0.22, actualFontSize * 2.6);  // upscale for pixel density
+        magic_y      = H * 0.54;
+        industrial_y = magic_y - fontSize * 0.85;
+        padLeft      = W * 0.064;          // matches px-6
       } else {
         // Desktop: read exact positions from DOM
         const h1Rect = h1El.getBoundingClientRect();
@@ -174,7 +178,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             candidates.push({
               wx: (sx - W * 0.5) * CAM_DIST / FL,
               // divide by yScale so project() maps back to the same screen pixel
-              wy: (H * 0.46 - sy) * CAM_DIST / (FL * yScale),
+              wy: (projCenterY - sy) * CAM_DIST / (FL * yScale),
             });
           }
         }
@@ -203,10 +207,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     canvas.addEventListener("mousemove", (e) => { mouseRef.current = getCanvasPos(e.clientX, e.clientY); });
     canvas.addEventListener("mouseleave", () => { mouseRef.current = { x: -9999, y: -9999 }; });
     canvas.addEventListener("touchmove", (e) => {
-      e.preventDefault();
       const t = e.touches[0];
       mouseRef.current = getCanvasPos(t.clientX, t.clientY);
-    }, { passive: false });
+    }, { passive: true });
     canvas.addEventListener("touchend", () => { mouseRef.current = { x: -9999, y: -9999 }; });
 
     // Water offscreen buffer
@@ -223,7 +226,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       const dz = wz + CAM_DIST;
       if (dz < 0.01) return null;
       const s = FL / dz;
-      return { sx: W * 0.5 + wx * s, sy: H * 0.46 - wy * s * yScale, s };
+      return { sx: W * 0.5 + wx * s, sy: projCenterY - wy * s * yScale, s };
     }
 
     function drawWater(t: number, alpha: number) {
@@ -323,7 +326,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           if (target && letterSampled) {
             const localT = Math.max(0, (phaseT - n.letterDelay) / Math.max(0.01, 1 - n.letterDelay));
             if (localT > 0) {
-              const force = localT * localT * 0.14;
+              const force = localT * localT * (MOB ? 0.22 : 0.14);
               n.vx += (target.wx - n.x) * force;
               n.vy += (target.wy - n.y) * force;
               n.vz += (0 - n.z) * force;

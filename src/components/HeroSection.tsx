@@ -15,9 +15,9 @@ const HeroSection = () => {
   const textOpacity = useTransform(scrollYProgress, [0.45, 0.85], [1, 0]);
 
   return (
-    <section 
+    <section
       ref={sectionRef}
-      className="relative h-screen w-full overflow-hidden flex items-end pb-16 md:pb-24"
+      className="relative h-svh md:h-screen w-full overflow-hidden flex items-center md:items-end md:pb-24"
     >
       {/* Nebula → grid assembly canvas */}
       <HeroGridNebula scrollYProgress={scrollYProgress} />
