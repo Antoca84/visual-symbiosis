@@ -9,10 +9,11 @@ const STEP_XY = 0.005;
 const STEP_S  = 0.1;
 
 const About = () => {
-  const [ledX, setLedX]     = useState(0.215);
-  const [ledY, setLedY]     = useState(0.720);
-  const [ledS, setLedS]     = useState(1.0);
+  const [ledX, setLedX]     = useState(0.185);
+  const [ledY, setLedY]     = useState(0.740);
+  const [ledS, setLedS]     = useState(1.3);
   const [lightsOn, setLightsOn] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   return (
     <main className="bg-background min-h-screen">
@@ -78,8 +79,17 @@ const About = () => {
         </div>
       </section>
 
+      {/* ── DEBUG TRIGGER ── */}
+      <button
+        onClick={() => setDebugOpen(v => !v)}
+        className="hidden md:flex fixed bottom-4 right-4 z-50 w-6 h-6 items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-white/20 hover:text-white/60 transition-all duration-300 text-[10px] font-mono"
+        title="LED debug"
+      >
+        ⚙
+      </button>
+
       {/* ── DEBUG PANEL (rimuovere dopo calibrazione) ── */}
-      <div className="hidden md:flex fixed bottom-4 right-4 z-50 flex-col gap-1 bg-black/80 border border-white/10 rounded p-3 text-[10px] font-mono text-white/70 select-none">
+      {debugOpen && <div className="hidden md:flex fixed bottom-12 right-4 z-50 flex-col gap-1 bg-black/80 border border-white/10 rounded p-3 text-[10px] font-mono text-white/70 select-none">
         <div className="text-white/40 mb-1 tracking-widest uppercase text-[9px]">LED debug</div>
 
         {/* X */}
@@ -113,7 +123,7 @@ const About = () => {
         >
           {lightsOn ? "Luci ON" : "Luci OFF"}
         </button>
-      </div>
+      </div>}
     </main>
   );
 };

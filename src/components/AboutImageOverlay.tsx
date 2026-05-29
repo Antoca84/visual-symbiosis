@@ -1,19 +1,27 @@
 import { useEffect, useRef } from "react";
 
-// 2 rows, 6 LEDs each
+// 6 rows total: 2+2+2, gap of 8px between pairs
+const mkRow = (oy: number, seed: number) => [
+  { ox: 0,  oy, c: [40, 220, 255] as [number,number,number], f: 2.1, p: seed },
+  { ox: 5,  oy, c: [0,  255, 100] as [number,number,number], f: 1.4, p: seed+0.8 },
+  { ox: 10, oy, c: [40, 200, 255] as [number,number,number], f: 0.7, p: seed+2.1 },
+  { ox: 15, oy, c: [0,  255, 80]  as [number,number,number], f: 1.9, p: seed+1.3 },
+  { ox: 20, oy, c: [40, 220, 255] as [number,number,number], f: 1.1, p: seed+3.2 },
+  { ox: 25, oy, c: [0,  200, 255] as [number,number,number], f: 2.5, p: seed+0.5 },
+];
+const mkRow2 = (oy: number, seed: number) => [
+  { ox: 0,  oy, c: [0,  255, 80]  as [number,number,number], f: 0.5, p: seed },
+  { ox: 5,  oy, c: [255, 90,  0]  as [number,number,number], f: 0.3, p: seed+1.0 },
+  { ox: 10, oy, c: [40, 220, 255] as [number,number,number], f: 0.4, p: seed+2.2 },
+  { ox: 15, oy, c: [0,  255, 100] as [number,number,number], f: 0.6, p: seed+0.9 },
+  { ox: 20, oy, c: [40, 180, 255] as [number,number,number], f: 1.6, p: seed+2.7 },
+  { ox: 25, oy, c: [0,  255, 80]  as [number,number,number], f: 1.2, p: seed+1.5 },
+];
+// pair1: oy 0,4 | gap 8px | pair2: oy 12,16 | gap 8px | pair3: oy 24,28
 const LEDS = [
-  { ox: 0,  oy: 0, c: [40, 220, 255] as [number,number,number], f: 2.1, p: 0.0 },
-  { ox: 5,  oy: 0, c: [0,  255, 100] as [number,number,number], f: 1.4, p: 0.8 },
-  { ox: 10, oy: 0, c: [40, 200, 255] as [number,number,number], f: 0.7, p: 2.1 },
-  { ox: 15, oy: 0, c: [0,  255, 80]  as [number,number,number], f: 1.9, p: 1.3 },
-  { ox: 20, oy: 0, c: [40, 220, 255] as [number,number,number], f: 1.1, p: 3.2 },
-  { ox: 25, oy: 0, c: [0,  200, 255] as [number,number,number], f: 2.5, p: 0.5 },
-  { ox: 0,  oy: 4, c: [0,  255, 80]  as [number,number,number], f: 0.5, p: 0.3 },
-  { ox: 5,  oy: 4, c: [255, 90,  0]  as [number,number,number], f: 0.3, p: 1.0 },
-  { ox: 10, oy: 4, c: [40, 220, 255] as [number,number,number], f: 0.4, p: 2.2 },
-  { ox: 15, oy: 4, c: [0,  255, 100] as [number,number,number], f: 0.6, p: 0.9 },
-  { ox: 20, oy: 4, c: [40, 180, 255] as [number,number,number], f: 1.6, p: 2.7 },
-  { ox: 25, oy: 4, c: [0,  255, 80]  as [number,number,number], f: 1.2, p: 1.5 },
+  ...mkRow(0,  0.0), ...mkRow2(4,  0.3),
+  ...mkRow(12, 1.1), ...mkRow2(16, 1.4),
+  ...mkRow(24, 2.2), ...mkRow2(28, 2.5),
 ];
 
 interface Props {
