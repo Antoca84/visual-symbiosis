@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import Navigation from "@/components/Navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import aboutImage from "@/assets/about-studio.jpg";
+import { AboutImageOverlay } from "@/components/AboutImageOverlay";
 
 const About = () => {
   return (
@@ -49,13 +50,14 @@ const About = () => {
             </ScrollReveal>
 
             <ScrollReveal delay={0.2}>
-              <div className="w-full overflow-hidden aspect-[4/5]">
+              <div className="w-full overflow-hidden aspect-[4/5] relative">
                 <img
                   src={aboutImage}
                   alt="Industrial Magic studio"
                   className="w-full h-full object-cover object-center"
                   loading="lazy"
                 />
+                <AboutImageOverlay />
               </div>
             </ScrollReveal>
           </div>
