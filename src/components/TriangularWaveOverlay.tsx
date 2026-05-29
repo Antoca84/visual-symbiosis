@@ -54,17 +54,19 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     };
     img.src = imageSrc;
 
-    // 1×BUF buffer: one pixel per row, each row gets col1 or col2 blended by wave
-    const BUF = 256;
+    // 2D offscreen buffer — diagonal wave, upscaled with smoothing
+    const BUF = 96;
     const waveC = document.createElement("canvas");
-    waveC.width = 1; waveC.height = BUF;
+    waveC.width = BUF; waveC.height = BUF;
     const wCtx  = waveC.getContext("2d")!;
-    const wData = wCtx.createImageData(1, BUF);
+    const wData = wCtx.createImageData(BUF, BUF);
     const wd    = wData.data;
 
-    const FREQ = 3.2;  // wave cycles visible vertically
-    const SPD  = 1.4;  // travel speed top → bottom
-    const EDGE = 0.08; // soft edge width between colors (0 = hard, 0.5 = full blend)
+    // Diagonal at ~35°: more FREQ_Y than FREQ_X → mostly vertical travel
+    const FREQ_X = 2.5;  // horizontal cycles
+    const FREQ_Y = 6.0;  // vertical cycles (dominant)
+    const SPD    = 1.2;  // travel speed
+    const EDGE   = 0.22; // blend softness
 
     let t = 0;
 
@@ -72,21 +74,21 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
       rafRef.current = requestAnimationFrame(draw);
       t += 0.005;
 
-      // Build wave: each row blends between col1 and col2
       for (let py = 0; py < BUF; py++) {
-        const ny   = py / BUF;
-        const wave = (Math.sin(ny * Math.PI * 2 * FREQ - t * SPD) + 1) / 2; // 0..1
-        // Soft threshold: hard boundary with slight feather
-        const f = Math.max(0, Math.min(1, (wave - (0.5 - EDGE)) / (2 * EDGE)));
-        const idx = py * 4;
-        wd[idx]   = Math.round(col1[0] + (col2[0] - col1[0]) * f);
-        wd[idx+1] = Math.round(col1[1] + (col2[1] - col1[1]) * f);
-        wd[idx+2] = Math.round(col1[2] + (col2[2] - col1[2]) * f);
-        wd[idx+3] = 255;
+        for (let px = 0; px < BUF; px++) {
+          const nx = px / BUF, ny = py / BUF;
+          // Diagonal wave: nx + ny projection traveling top→bottom
+          const wave = (Math.sin((nx * FREQ_X + ny * FREQ_Y) * Math.PI - t * SPD) + 1) / 2;
+          const f = Math.max(0, Math.min(1, (wave - (0.5 - EDGE)) / (2 * EDGE)));
+          const idx = (py * BUF + px) * 4;
+          wd[idx]   = Math.round(col1[0] + (col2[0] - col1[0]) * f);
+          wd[idx+1] = Math.round(col1[1] + (col2[1] - col1[1]) * f);
+          wd[idx+2] = Math.round(col1[2] + (col2[2] - col1[2]) * f);
+          wd[idx+3] = 255;
+        }
       }
       wCtx.putImageData(wData, 0, 0);
 
-      // Scale 1×BUF → W×H: replaces image with animated 2-color wave
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
       ctx.imageSmoothingEnabled = true;
