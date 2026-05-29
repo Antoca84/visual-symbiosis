@@ -24,8 +24,8 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     ro.observe(canvas);
 
     // Extract two dominant colors via luma median split
-    let col1 = [18, 20, 32];
-    let col2 = [100, 110, 130];
+    let col1 = [10, 12, 22];
+    let col2 = [140, 155, 180];
 
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -49,48 +49,66 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
         if (l < median) { r1+=data[i*4]; g1+=data[i*4+1]; b1+=data[i*4+2]; c1++; }
         else            { r2+=data[i*4]; g2+=data[i*4+1]; b2+=data[i*4+2]; c2++; }
       }
-      if (c1 > 0) col1 = [Math.round(r1/c1), Math.round(g1/c1), Math.round(b1/c1)];
-      if (c2 > 0) col2 = [Math.round(r2/c2), Math.round(g2/c2), Math.round(b2/c2)];
+      // Push colors apart for clear contrast
+      if (c1 > 0) col1 = [Math.round(r1/c1*0.3), Math.round(g1/c1*0.3), Math.round(b1/c1*0.3)];
+      if (c2 > 0) col2 = [
+        Math.min(255, Math.round(r2/c2*2.0 + 40)),
+        Math.min(255, Math.round(g2/c2*2.0 + 50)),
+        Math.min(255, Math.round(b2/c2*1.8 + 60)),
+      ];
     };
     img.src = imageSrc;
 
-    // High-res offscreen — sharp stripes, no blur
-    const BUF = 512;
-    const waveC = document.createElement("canvas");
-    waveC.width = BUF; waveC.height = BUF;
-    const wCtx  = waveC.getContext("2d")!;
-    const wData = wCtx.createImageData(BUF, BUF);
-    const wd    = wData.data;
-
-    const FREQ_X = 3.0;
-    const FREQ_Y = 7.0;
-    const SPD    = 3.0;
-    const EDGE   = 0.04; // crisp boundary
-
+    const CELL  = 48;  // triangle grid cell size (px)
+    const FREQ  = 2.8; // wave frequency across grid
+    const SPD   = 1.8; // animation speed
     let t = 0;
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.018;
+      t += 0.016;
 
-      for (let py = 0; py < BUF; py++) {
-        for (let px = 0; px < BUF; px++) {
-          const nx = px / BUF, ny = py / BUF;
-          const raw = (Math.sin((nx * FREQ_X + ny * FREQ_Y) * Math.PI - t * SPD) + 1) / 2;
-          const wf  = Math.max(0, Math.min(1, (raw - (0.5 - EDGE)) / (2 * EDGE)));
-          const idx = (py * BUF + px) * 4;
-          wd[idx]   = Math.round(col1[0] + (col2[0] - col1[0]) * wf);
-          wd[idx+1] = Math.round(col1[1] + (col2[1] - col1[1]) * wf);
-          wd[idx+2] = Math.round(col1[2] + (col2[2] - col1[2]) * wf);
-          wd[idx+3] = 255;
+      ctx.clearRect(0, 0, W, H);
+
+      const cols = Math.ceil(W / CELL) + 1;
+      const rows = Math.ceil(H / CELL) + 1;
+
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const x0 = col * CELL,        y0 = row * CELL;
+          const x1 = (col + 1) * CELL,  y1 = row * CELL;
+          const x2 = col * CELL,        y2 = (row + 1) * CELL;
+          const x3 = (col + 1) * CELL,  y3 = (row + 1) * CELL;
+
+          // Upper-left triangle centroid
+          const cxa = (x0 + x1 + x2) / 3;
+          const cya = (y0 + y1 + y2) / 3;
+          const phaseA = (cxa / W + cya / H * 1.6) * Math.PI * FREQ - t * SPD;
+          const fa = Math.sin(phaseA) > 0;
+
+          ctx.beginPath();
+          ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2);
+          ctx.closePath();
+          ctx.fillStyle = fa
+            ? `rgb(${col2[0]},${col2[1]},${col2[2]})`
+            : `rgb(${col1[0]},${col1[1]},${col1[2]})`;
+          ctx.fill();
+
+          // Lower-right triangle centroid
+          const cxb = (x1 + x2 + x3) / 3;
+          const cyb = (y1 + y2 + y3) / 3;
+          const phaseB = (cxb / W + cyb / H * 1.6) * Math.PI * FREQ - t * SPD;
+          const fb = Math.sin(phaseB) > 0;
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3);
+          ctx.closePath();
+          ctx.fillStyle = fb
+            ? `rgb(${col2[0]},${col2[1]},${col2[2]})`
+            : `rgb(${col1[0]},${col1[1]},${col1[2]})`;
+          ctx.fill();
         }
       }
-      wCtx.putImageData(wData, 0, 0);
-
-      ctx.globalCompositeOperation = "source-over";
-      ctx.globalAlpha = 1;
-      ctx.imageSmoothingEnabled = false; // keep stripes sharp
-      ctx.drawImage(waveC, 0, 0, W, H);
     };
 
     rafRef.current = requestAnimationFrame(draw);
@@ -101,7 +119,7 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ mixBlendMode: "color" }}
+      style={{ mixBlendMode: "overlay", opacity: 0.85 }}
     />
   );
 }
