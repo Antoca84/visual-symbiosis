@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 
 interface Props { imageSrc: string; }
 
-const PROC = 512;
 const AMP  = 0.18; // brightness swing ±18%
 
 // Value noise — no periodic banding
@@ -31,6 +30,9 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     const canvas = canvasRef.current!;
     const ctx    = canvas.getContext("2d")!;
     let W = 0, H = 0;
+
+    const MOB  = window.innerWidth < 768;
+    const PROC = MOB ? 256 : 512;
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -69,11 +71,9 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     };
     img.src = imageSrc;
 
-    // Noise scale: ~5 cells across image → each cell larger than individual triangles
-    const SCALE = 5.0;
-    // Drift speed — slow enough to feel organic, fast enough to notice
-    const SPD_X = 0.096;
-    const SPD_Y = 0.168;
+    const SCALE = MOB ? 4.0 : 5.0; // meno celle su mobile → patch più grandi
+    const SPD_X = MOB ? 0.080 : 0.096;
+    const SPD_Y = MOB ? 0.140 : 0.168;
 
     let t = 0;
 
