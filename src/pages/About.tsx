@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import Navigation from "@/components/Navigation";
 import ScrollReveal from "@/components/ScrollReveal";
-import aboutImage from "@/assets/about-studio.png";
+import aboutImage from "@/assets/about-studio.jpg";
 
 const About = () => {
   return (
@@ -20,9 +20,9 @@ const About = () => {
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-center">
+          <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-start">
             <ScrollReveal>
-              <div className="space-y-8">
+              <div className="space-y-8 md:py-4">
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
                   Industrial Magic is a VFX, CGI, and 3D studio. We create
                   visual content for cinema, commercial production, and
@@ -51,16 +51,13 @@ const About = () => {
             </ScrollReveal>
 
             <ScrollReveal delay={0.2}>
-              <div>
-                <div className="w-full overflow-hidden" style={{ aspectRatio: "3/4" }}>
-                  <img
-                    src={aboutImage}
-                    alt="Industrial Magic studio"
-                    className="w-full object-cover"
-                    style={{ height: "calc(100% + 3cm)", marginTop: "-2cm" }}
-                    loading="lazy"
-                  />
-                </div>
+              <div className="w-full overflow-hidden aspect-[4/5]">
+                <img
+                  src={aboutImage}
+                  alt="Industrial Magic studio"
+                  className="w-full h-full object-cover object-center"
+                  loading="lazy"
+                />
               </div>
             </ScrollReveal>
           </div>
