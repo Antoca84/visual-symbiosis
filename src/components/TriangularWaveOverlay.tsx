@@ -59,9 +59,9 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     };
     img.src = imageSrc;
 
-    const CELL  = 48;  // triangle grid cell size (px)
-    const FREQ  = 2.8; // wave frequency across grid
-    const SPD   = 1.8; // animation speed
+    const CELL  = 32;  // triangle grid cell size (px)
+    const FREQ  = 2.2; // wave frequency across grid
+    const SPD   = 0.9; // animation speed
     let t = 0;
 
     const draw = () => {
@@ -119,7 +119,7 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ mixBlendMode: "overlay", opacity: 0.85 }}
+      style={{ mixBlendMode: "soft-light", opacity: 0.18 }}
     />
   );
 }
