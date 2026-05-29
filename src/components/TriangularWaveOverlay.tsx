@@ -35,9 +35,11 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
       n2(x,y)*0.500 + n2(x*2.1,y*2.1)*0.250 + n2(x*4.3,y*4.3)*0.125;
 
     const MOB = window.innerWidth < 768;
-    const STRIP_H  = MOB ? 6 : 3;   // px per strip
-    const MAX_DISP = MOB ? 3 : 7;   // max horizontal displacement px
-    const CHROMA   = MOB ? 1.5 : 3.5; // max channel separation px
+    const STRIP_H   = MOB ? 6 : 3;    // px per strip
+    const MAX_DISP  = MOB ? 10 : 18;  // serpentine amplitude px
+    const CHROMA    = MOB ? 4 : 7;    // channel separation px
+    const WAVE_FREQ = 2.4;            // full cycles visible vertically
+    const WAVE_SPD  = 1.6;            // wave travel speed (top → bottom)
 
     // Source image canvas + isolated R / B channel canvases
     let srcC: HTMLCanvasElement | null = null;
@@ -99,23 +101,26 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
         const destY = i * STRIP_H;
         const destH = Math.min(STRIP_H + 1, H - destY); // +1 closes inter-strip gap
         const ny = destY / H;
-        // Two-octave displacement: slow large wave + faster small ripple
-        const disp = (fbm(ny * 1.8 + t * 0.22, t * 0.14) - 0.5) * 2 * MAX_DISP
-                   + (fbm(ny * 5.1 + 3.7, t * 0.38 + 9.2) - 0.5) * 2 * MAX_DISP * 0.28;
+        // Serpentine wave traveling top → bottom: alternates L/R per strip
+        const phase = ny * Math.PI * 2 * WAVE_FREQ - t * WAVE_SPD;
+        const disp  = Math.sin(phase) * MAX_DISP
+                    + Math.sin(phase * 2.1 + 0.9) * MAX_DISP * 0.22 // harmonic for organics
+                    + (fbm(ny * 4.0, t * 0.15) - 0.5) * MAX_DISP * 0.12; // tiny noise
         const srcY0 = Math.round(ny * srcH);
         const srcH0 = Math.max(1, Math.round(destH / H * srcH));
         ctx.drawImage(srcC, 0, srcY0, srcW, srcH0, disp, destY, W, destH);
       }
 
-      // ── Chromatic aberration: R shifted right, B shifted left ──────────────
+      // ── Chromatic aberration: follows wave at image midpoint ───────────────
       if (redC && bluC) {
-        const cx = Math.sin(t * 0.31) * CHROMA;
-        const cy = Math.cos(t * 0.24) * CHROMA * 0.35;
+        const midPhase = 0.5 * Math.PI * 2 * WAVE_FREQ - t * WAVE_SPD;
+        const cx = Math.sin(midPhase) * CHROMA;
+        const cy = Math.sin(midPhase * 2.1 + 0.9) * CHROMA * 0.22;
 
         ctx.globalCompositeOperation = "screen";
-        ctx.globalAlpha = 0.28;
+        ctx.globalAlpha = 0.32;
         ctx.drawImage(redC,  cx,  cy, W, H);
-        ctx.globalAlpha = 0.28;
+        ctx.globalAlpha = 0.32;
         ctx.drawImage(bluC, -cx, -cy, W, H);
       }
 
