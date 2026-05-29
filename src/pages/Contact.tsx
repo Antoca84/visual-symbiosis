@@ -8,10 +8,23 @@ const Contact = () => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(EMAIL).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    const confirm = () => { setCopied(true); setTimeout(() => setCopied(false), 1200); };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(EMAIL).then(confirm).catch(fallback);
+    } else {
+      fallback();
+    }
+  };
+
+  const fallback = () => {
+    const el = document.createElement("input");
+    el.value = EMAIL;
+    el.style.cssText = "position:fixed;opacity:0";
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    try { document.execCommand("copy"); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch {}
+    document.body.removeChild(el);
   };
 
   return (
