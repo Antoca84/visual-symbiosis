@@ -45,14 +45,24 @@ export function AboutImageOverlay() {
       ctx.restore();
     };
 
-    // Server LEDs — tiny, precise, blinking
+    // Server LEDs — horizontal strip, rack-style (1U front panel)
+    // Row 1: activity lights (tight spacing)
+    // Row 2: status lights (wider spacing below)
     const LEDS = [
-      { ox: 0,  oy: 0,  c: [40, 220, 255] as [number,number,number], f: 0.9,  p: 0.0 },
-      { ox: 9,  oy: 0,  c: [0,  255, 100] as [number,number,number], f: 1.5,  p: 1.1 },
-      { ox: 18, oy: 0,  c: [40, 180, 255] as [number,number,number], f: 0.6,  p: 2.4 },
-      { ox: 0,  oy: 7,  c: [0,  255, 80]  as [number,number,number], f: 2.0,  p: 0.7 },
-      { ox: 9,  oy: 7,  c: [255, 80,  0]  as [number,number,number], f: 1.1,  p: 3.0 },
-      { ox: 18, oy: 7,  c: [40, 220, 255] as [number,number,number], f: 1.8,  p: 1.5 },
+      // Row 1 — activity strip (12 LEDs, 6px apart)
+      { ox: 0,  oy: 0,  c: [40, 220, 255] as [number,number,number], f: 2.1, p: 0.0 },
+      { ox: 6,  oy: 0,  c: [0,  255, 100] as [number,number,number], f: 1.4, p: 0.8 },
+      { ox: 12, oy: 0,  c: [40, 200, 255] as [number,number,number], f: 0.7, p: 2.1 },
+      { ox: 18, oy: 0,  c: [0,  255, 80]  as [number,number,number], f: 1.9, p: 1.3 },
+      { ox: 24, oy: 0,  c: [40, 220, 255] as [number,number,number], f: 1.1, p: 3.2 },
+      { ox: 30, oy: 0,  c: [0,  200, 255] as [number,number,number], f: 2.5, p: 0.5 },
+      { ox: 36, oy: 0,  c: [0,  255, 100] as [number,number,number], f: 0.9, p: 1.8 },
+      { ox: 42, oy: 0,  c: [40, 180, 255] as [number,number,number], f: 1.6, p: 2.7 },
+      // Row 2 — status lights (4 LEDs, 12px apart, one is orange/red)
+      { ox: 0,  oy: 8,  c: [0,  255, 80]  as [number,number,number], f: 0.5, p: 0.3 },
+      { ox: 12, oy: 8,  c: [255, 90,  0]  as [number,number,number], f: 0.3, p: 1.0 },
+      { ox: 24, oy: 8,  c: [40, 220, 255] as [number,number,number], f: 0.4, p: 2.2 },
+      { ox: 36, oy: 8,  c: [0,  255, 100] as [number,number,number], f: 0.6, p: 0.9 },
     ];
 
     let t = 0;
@@ -82,8 +92,8 @@ export function AboutImageOverlay() {
       glow(0.340, 0.660, 0.10, 0.06, 60, 140, 255, mPulse);
 
       // ── Server LEDs (bottom-left rack) ──────────────────────────────────
-      const sx = 0.145 * W;
-      const sy = 0.845 * H;
+      const sx = 0.055 * W;  // rack vicino al bordo sx
+      const sy = 0.838 * H;
 
       for (const led of LEDS) {
         const blink = (Math.sin(t * led.f * Math.PI * 2 + led.p) + 1) / 2;
