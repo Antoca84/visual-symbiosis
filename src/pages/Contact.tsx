@@ -1,7 +1,19 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import Navigation from "@/components/Navigation";
 
+const EMAIL = "hello@industrialmagic.it";
+
 const Contact = () => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(EMAIL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <main className="bg-background min-h-screen flex flex-col">
       <Navigation />
@@ -17,11 +29,23 @@ const Contact = () => {
               Contact
             </p>
             <a
-              href="mailto:hello@industrialmagic.it"
+              href={`mailto:${EMAIL}`}
               className="font-serif text-3xl md:text-5xl lg:text-6xl text-foreground/80 italic hover:text-foreground transition-colors duration-500 inline-block"
             >
-              hello@industrialmagic.it
+              {EMAIL}
             </a>
+
+            <motion.button
+              onClick={handleCopy}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="mt-8 flex items-center gap-3 text-[11px] tracking-[0.3em] uppercase text-muted-foreground hover:text-foreground transition-colors duration-300 group"
+            >
+              <span className="w-4 h-px bg-current transition-all duration-300 group-hover:w-6" />
+              {copied ? "Copied" : "Copy e-mail"}
+            </motion.button>
+
             <p className="font-serif text-base md:text-lg text-foreground/30 italic mt-16">
               Collaborations emerge through dialogue, not applications.
             </p>
