@@ -23,59 +23,31 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    // ── Noise ─────────────────────────────────────────────────────────────────
-    const _h = (n: number) => { const x = Math.sin(n) * 43758.5453; return x - Math.floor(x); };
-    const n2 = (x: number, y: number) => {
-      const ix = Math.floor(x), iy = Math.floor(y), fx = x-ix, fy = y-iy;
-      const ux = fx*fx*(3-2*fx), uy = fy*fy*(3-2*fy);
-      const h = (a: number, b: number) => _h(a + b*57.3);
-      return (h(ix,iy)*(1-ux)+h(ix+1,iy)*ux)*(1-uy)+(h(ix,iy+1)*(1-ux)+h(ix+1,iy+1)*ux)*uy;
-    };
-    const fbm = (x: number, y: number) =>
-      n2(x,y)*0.500 + n2(x*2.1,y*2.1)*0.250 + n2(x*4.3,y*4.3)*0.125;
-
-    const MOB = window.innerWidth < 768;
-    const STRIP_H  = MOB ? 6 : 3;
-    const MAX_DISP = MOB ? 3 : 7;
-    const CHROMA   = MOB ? 1.5 : 3.5;
-
-    // Source image canvas + isolated R / B channel canvases
+    // Static image canvas — drawn every frame, never displaced
     let srcC: HTMLCanvasElement | null = null;
-    let redC: HTMLCanvasElement | null = null;
-    let bluC: HTMLCanvasElement | null = null;
 
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const IW = Math.min(img.width, 900);
       const IH = Math.round(img.height * IW / img.width);
-
-      const makeCanvas = () => {
-        const c = document.createElement("canvas");
-        c.width = IW; c.height = IH;
-        return c;
-      };
-
-      srcC = makeCanvas();
+      srcC = document.createElement("canvas");
+      srcC.width = IW; srcC.height = IH;
       srcC.getContext("2d")!.drawImage(img, 0, 0, IW, IH);
-
-      // Red channel (zero G and B)
-      redC = makeCanvas();
-      const rCtx = redC.getContext("2d")!;
-      rCtx.drawImage(img, 0, 0, IW, IH);
-      const rData = rCtx.getImageData(0, 0, IW, IH);
-      for (let i = 0; i < rData.data.length; i += 4) { rData.data[i+1] = 0; rData.data[i+2] = 0; }
-      rCtx.putImageData(rData, 0, 0);
-
-      // Blue channel (zero R and G)
-      bluC = makeCanvas();
-      const bCtx = bluC.getContext("2d")!;
-      bCtx.drawImage(img, 0, 0, IW, IH);
-      const bData = bCtx.getImageData(0, 0, IW, IH);
-      for (let i = 0; i < bData.data.length; i += 4) { bData.data[i] = 0; bData.data[i+1] = 0; }
-      bCtx.putImageData(bData, 0, 0);
     };
     img.src = imageSrc;
+
+    // 1×BUF wave buffer — only vertical variation matters, scaled to full W×H
+    const BUF = 128;
+    const waveC = document.createElement("canvas");
+    waveC.width = 1; waveC.height = BUF;
+    const wCtx  = waveC.getContext("2d")!;
+    const wData = wCtx.createImageData(1, BUF);
+    const wd    = wData.data;
+
+    const FREQ  = 2.8;  // wave cycles visible vertically
+    const SPD   = 0.80; // travel speed top → bottom
+    const ALPHA = 210;  // overlay alpha (0–255); controls effect intensity
 
     let t = 0;
 
@@ -84,41 +56,29 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
       if (!srcC) return;
       t += 0.003;
 
-      ctx.clearRect(0, 0, W, H);
-
-      // ── Heat distortion: horizontal strip displacement ─────────────────────
+      // ── Static image (no displacement) ────────────────────────────────────
       ctx.globalCompositeOperation = "source-over";
       ctx.globalAlpha = 1;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(srcC, 0, 0, W, H);
 
-      const numStrips = Math.ceil(H / STRIP_H);
-      const srcH = srcC.height, srcW = srcC.width;
-
-      for (let i = 0; i < numStrips; i++) {
-        const destY = i * STRIP_H;
-        const destH = Math.min(STRIP_H + 1, H - destY); // +1 closes inter-strip gap
-        const ny = destY / H;
-        // FBM noise field sliding top → bottom: subtract t from y-sample so
-        // pattern travels downward; second arg constant → no global x-correlation
-        const disp = (fbm(ny * 1.8 - t * 0.60, 3.7) - 0.5) * 2 * MAX_DISP
-                   + (fbm(ny * 4.8 - t * 0.90, 9.2) - 0.5) * 2 * MAX_DISP * 0.28;
-        const srcY0 = Math.round(ny * srcH);
-        const srcH0 = Math.max(1, Math.round(destH / H * srcH));
-        ctx.drawImage(srcC, 0, srcY0, srcW, srcH0, disp, destY, W, destH);
+      // ── Color wave: 1-pixel-wide luminance strip, scaled to full canvas ───
+      // overlay blend: luma > 128 brightens, < 128 darkens.
+      // Traveling sine → alternating bright/dark bands slide top → bottom.
+      for (let py = 0; py < BUF; py++) {
+        const ny   = py / BUF;
+        const wave = (Math.sin(ny * Math.PI * 2 * FREQ - t * SPD) + 1) / 2; // 0..1
+        // Map to 80–176 to avoid clipping extremes; overlay stays subtle
+        const luma = Math.round(80 + wave * 96);
+        const idx  = py * 4;
+        wd[idx] = luma; wd[idx + 1] = luma; wd[idx + 2] = luma; wd[idx + 3] = ALPHA;
       }
+      wCtx.putImageData(wData, 0, 0);
 
-      // ── Chromatic aberration ───────────────────────────────────────────────
-      if (redC && bluC) {
-        const cx = Math.sin(t * 0.31) * CHROMA;
-        const cy = Math.cos(t * 0.24) * CHROMA * 0.35;
-
-        ctx.globalCompositeOperation = "screen";
-        ctx.globalAlpha = 0.28;
-        ctx.drawImage(redC,  cx,  cy, W, H);
-        ctx.globalAlpha = 0.28;
-        ctx.drawImage(bluC, -cx, -cy, W, H);
-      }
+      ctx.globalCompositeOperation = "overlay";
+      ctx.globalAlpha = 1;
+      ctx.drawImage(waveC, 0, 0, W, H);
 
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = "source-over";
