@@ -63,16 +63,16 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     const wd    = wData.data;
 
     // Diagonal at ~35°: more FREQ_Y than FREQ_X → mostly vertical travel
-    const FREQ_X = 2.5;  // horizontal cycles
-    const FREQ_Y = 6.0;  // vertical cycles (dominant)
-    const SPD    = 1.2;  // travel speed
-    const EDGE   = 0.22; // blend softness
+    const FREQ_X = 4.0;  // horizontal cycles
+    const FREQ_Y = 9.0;  // vertical cycles (dominant)
+    const SPD    = 3.5;  // travel speed
+    const EDGE   = 0.20; // blend softness
 
     let t = 0;
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
-      t += 0.005;
+      t += 0.020;
 
       for (let py = 0; py < BUF; py++) {
         for (let px = 0; px < BUF; px++) {
