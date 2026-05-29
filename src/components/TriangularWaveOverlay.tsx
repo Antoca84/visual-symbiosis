@@ -72,8 +72,8 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     // Noise scale: ~5 cells across image → each cell larger than individual triangles
     const SCALE = 5.0;
     // Drift speed — slow enough to feel organic, fast enough to notice
-    const SPD_X = 0.08;
-    const SPD_Y = 0.14;
+    const SPD_X = 0.096;
+    const SPD_Y = 0.168;
 
     let t = 0;
 
