@@ -10,7 +10,7 @@ const STEP_S  = 0.1;
 
 const About = () => {
   const [ledX, setLedX]     = useState(0.185);
-  const [ledY, setLedY]     = useState(0.740);
+  const [ledY, setLedY]     = useState(0.745);
   const [ledS, setLedS]     = useState(1.3);
   const [lightsOn, setLightsOn] = useState(true);
   const [debugOpen, setDebugOpen] = useState(false);
