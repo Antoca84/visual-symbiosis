@@ -10,19 +10,17 @@ const About = () => {
 
       <section className="pt-32 md:pt-44 px-6 md:px-12 pb-32 md:pb-48">
         <div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <p className="text-[11px] tracking-[0.3em] uppercase text-muted-foreground mb-8">
-              About
-            </p>
-          </motion.div>
-
           <div className="grid md:grid-cols-2 gap-16 md:gap-24 items-start">
             <ScrollReveal>
               <div className="space-y-8 md:py-4">
+                <motion.p
+                  className="text-[11px] tracking-[0.3em] uppercase text-muted-foreground"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+                >
+                  About
+                </motion.p>
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
                   Industrial Magic is a VFX, CGI, and 3D studio. We create
                   visual content for cinema, commercial production, and
