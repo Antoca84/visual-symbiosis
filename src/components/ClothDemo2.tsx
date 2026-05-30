@@ -5,8 +5,8 @@ const ROWS = 28;
 const GRAVITY = 0.22;
 const DAMPING = 0.985;
 const ITER = 6;
-const MOUSE_R = 60;
-const TEAR_MULT = 1.5;
+const MOUSE_R = 90;
+const TEAR_MULT = 1.3;
 
 const T_SETTLE  = 1.2;
 const T_ATTRACT = 2.8;
@@ -203,13 +203,13 @@ export function ClothDemo2() {
           }
         }
 
-        // Applica fisica base (gravity + damping) durante dissolve
+        // Fisica base senza gravity durante dissolve (nodi volano outward)
         for (const p of pts) {
           if (p.pinned) continue;
           const vx = (p.x - p.px) * DAMPING;
           const vy = (p.y - p.py) * DAMPING;
           p.px = p.x; p.py = p.y;
-          p.x += vx; p.y += vy + GRAVITY;
+          p.x += vx; p.y += vy;
           p.heat *= 0.98;
         }
 
@@ -307,7 +307,7 @@ export function ClothDemo2() {
           if (dist > tear) { s.on = false; continue; }
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 30) s.on = false;
+            if (Math.hypot(cmx - mx, cmy - my) < 55) s.on = false;
           }
         }
       }
@@ -333,7 +333,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.40) {
+        if (broken / segs.length >= 0.22) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
