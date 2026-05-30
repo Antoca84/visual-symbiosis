@@ -1,5 +1,20 @@
 import { useEffect, useRef } from "react";
 
+// ── Noise (identico HeroGridNebula) ──────────────────────────────────────────
+const _hs = (n: number) => { const x = Math.sin(n) * 43758.5453; return x - Math.floor(x); };
+function vnoise2(x: number, y: number): number {
+  const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
+  const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy);
+  const h=(a:number,b:number)=>_hs(a+b*57.3);
+  const lr=(a:number,b:number,t:number)=>a+t*(b-a);
+  return lr(lr(h(ix,iy),h(ix+1,iy),ux),lr(h(ix,iy+1),h(ix+1,iy+1),ux),uy);
+}
+function fbm2(x: number, y: number, o = 3): number {
+  let v=0,a=0.5,f=1;
+  for(let i=0;i<o;i++){v+=a*vnoise2(x*f,y*f);a*=0.5;f*=2;}
+  return v;
+}
+
 const COLS = 60;
 const ROWS = 28;
 const GRAVITY = 0.22;
@@ -109,6 +124,41 @@ export function ClothDemo2() {
     let t0: number | null = null;
     let ready = false;
     let letterPixels: { x: number; y: number }[] = [];
+    let tAnim = 0; // tempo animazione per water
+
+    // Water offscreen (identico HeroGridNebula)
+    const WW = 240, WH = 135;
+    const wCanvas = document.createElement("canvas");
+    wCanvas.width = WW; wCanvas.height = WH;
+    const wCtx = wCanvas.getContext("2d")!;
+    const wData = wCtx.createImageData(WW, WH);
+
+    function drawWater(alpha: number) {
+      if (alpha <= 0.01) return;
+      const d = wData.data;
+      const t = tAnim;
+      for (let py = 0; py < WH; py++) {
+        for (let px = 0; px < WW; px++) {
+          const nx = px / WW * 3.2, ny = py / WH * 1.8;
+          const w1 = fbm2(nx + t * 0.055, ny + 0.5 + t * 0.038, 4);
+          const w2 = fbm2(nx * 0.55 + 4.1 - t * 0.041, ny * 0.75 + 2.3 + t * 0.049, 4);
+          const shimmer = Math.max(0, vnoise2(nx * 2.1 + t * 0.09, ny * 2.3 + 6.1 - t * 0.07) - 0.62) * 2.8;
+          const h = Math.max(0, Math.min(1, w1 * 0.55 + w2 * 0.45));
+          let r: number, g: number, b: number;
+          if (h < 0.5) { const f = h * 2; r = Math.round(8+32*f); g = Math.round(22+68*f); b = Math.round(55+90*f); }
+          else { const f = (h-0.5)*2; r = Math.round(40+30*f+shimmer*60); g = Math.round(90+70*f+shimmer*80); b = Math.round(145+65*f+shimmer*60); }
+          const idx = (py * WW + px) * 4;
+          d[idx]=Math.min(255,r); d[idx+1]=Math.min(255,g); d[idx+2]=Math.min(255,b); d[idx+3]=255;
+        }
+      }
+      wCtx.putImageData(wData, 0, 0);
+      ctx.globalAlpha = alpha;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(wCanvas, 0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.imageSmoothingEnabled = false;
+    }
 
     // Dissolve state (come HeroGridNebula)
     let dissolveTriggered = false;
@@ -185,6 +235,7 @@ export function ClothDemo2() {
       if (t0 === null) t0 = ts;
       const dt = Math.min((ts - lastTs) / 1000, 0.05);
       lastTs = ts;
+      tAnim += 0.011;
       const el = (ts - t0) / 1000;
       const { x: mx, y: my, down } = mou.current;
 
@@ -242,7 +293,7 @@ export function ClothDemo2() {
           reconstruct(lastTs);
         }
 
-        render(0.055, true);
+        render(0.055, true, 0.3);
         return;
       }
 
@@ -359,20 +410,26 @@ export function ClothDemo2() {
         }
       }
 
-      // clearAlpha per fase (come HeroGridNebula)
+      // clearAlpha per fase — floor alto per evitare accumulo gradient/vignette
       if (phase === 2 && gridEntryT < 0 && !dissolveTriggered) gridEntryT = ts;
       if (dissolveTriggered || phase < 2) gridEntryT = -1;
       const gridAge = gridEntryT >= 0 ? (ts - gridEntryT) / 1000 : 0;
-      const clearAlpha = phase === 0 ? 0.11
-        : phase === 1 ? 0.18
-        : 0.18 + 0.77 * Math.min(1, gridAge / 1.5);
+      const clearAlpha = phase === 0 ? 0.65
+        : phase === 1 ? 0.72
+        : 0.72 + 0.23 * Math.min(1, gridAge / 1.5);
 
-      render(clearAlpha, false);
+      // water alpha: 0 in settle, sale in attract, pieno in interactive
+      const waterAlpha = phase === 0 ? 0
+        : phase === 1 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) * 0.45
+        : 0.45;
+
+      render(clearAlpha, false, waterAlpha);
     }
 
-    function render(clearAlpha: number, inDissolve: boolean) {
+    function render(clearAlpha: number, inDissolve: boolean, waterAlpha: number) {
       ctx.fillStyle = `rgba(11,13,20,${clearAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
+      drawWater(waterAlpha);
       ctx.lineCap = "round";
 
       for (const s of segs) {
