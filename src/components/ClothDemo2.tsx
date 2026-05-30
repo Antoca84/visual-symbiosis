@@ -11,18 +11,14 @@ const TEAR_MULT = 1.5;
 const T_SETTLE  = 1.2;
 const T_ATTRACT = 2.8;
 
-// Rebuild timing (secondi relativi)
-const REBUILD_BURST   = 0.7;   // burst outward
-const REBUILD_REFORM  = 1.8;   // convergenza verso lettere
-const REBUILD_TOTAL   = REBUILD_BURST + REBUILD_REFORM;
-
 interface Pt {
   x: number; y: number;
   px: number; py: number;
   pinned: boolean;
-  lx: number; ly: number;
-  ld: number;
+  lx: number; ly: number; ld: number;
+  ix: number; iy: number;       // posizione iniziale grid (per misurare displacement)
   heat: number;
+  dissolveDelay: number;        // delay per-nodo prima dello slacken
 }
 
 interface Seg {
@@ -41,9 +37,13 @@ function build(W: number, H: number) {
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++) {
       const x = c * sx, y = oy + r * sy;
-      pts.push({ x, y, px: x, py: y,
+      pts.push({
+        x, y, px: x, py: y,
         pinned: r === 0 && c % 3 === 0,
-        lx: x, ly: y, ld: Infinity, heat: 0 });
+        lx: x, ly: y, ld: Infinity,
+        ix: x, iy: y,
+        heat: 0, dissolveDelay: 0,
+      });
     }
 
   const segs: Seg[] = [];
@@ -108,10 +108,13 @@ export function ClothDemo2() {
     let pts: Pt[] = [], segs: Seg[] = [];
     let t0: number | null = null;
     let ready = false;
-    let rebuilding = false;
-    let rebuildElapsed = 0;   // secondi dall'inizio rebuild
-    let totalSegs = 0;
-    let burstApplied = false; // impulso outward applicato una volta sola
+    let letterPixels: { x: number; y: number }[] = [];
+
+    // Dissolve state (come HeroGridNebula)
+    let dissolveTriggered = false;
+    let dissolveExploding = false;
+    let dissolveOriginX = 0, dissolveOriginY = 0;
+    let dissolveT = 0;
 
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
@@ -119,10 +122,13 @@ export function ClothDemo2() {
       canvas.width = W * dpr; canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const d = build(W, H); pts = d.pts; segs = d.segs;
-      totalSegs = segs.length;
-      ready = false; t0 = null;
-      rebuilding = false; rebuildElapsed = 0; burstApplied = false;
-      sampleLetters(W, H).then(lp => { assignTargets(pts, lp); ready = true; });
+      ready = false; t0 = null; letterPixels = [];
+      dissolveTriggered = false; dissolveExploding = false; dissolveT = 0;
+      sampleLetters(W, H).then(lp => {
+        letterPixels = lp;
+        assignTargets(pts, lp);
+        ready = true;
+      });
     };
     resize();
     window.addEventListener("resize", resize);
@@ -154,7 +160,7 @@ export function ClothDemo2() {
     function frame(ts: number) {
       raf.current = requestAnimationFrame(frame);
       if (t0 === null) t0 = ts;
-      const dt = Math.min((ts - lastTs) / 1000, 0.05); // cap dt
+      const dt = Math.min((ts - lastTs) / 1000, 0.05);
       lastTs = ts;
       const el = (ts - t0) / 1000;
       const { x: mx, y: my, down } = mou.current;
@@ -163,67 +169,84 @@ export function ClothDemo2() {
         : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
-      // ── Rebuild ───────────────────────────────────────────────────────
-      if (rebuilding) {
-        rebuildElapsed += dt;
+      // ── Dissolve physics (stile HeroGridNebula) ───────────────────────
+      if (dissolveTriggered) {
+        dissolveT += dt;
 
-        if (!burstApplied) {
-          burstApplied = true;
-          for (const s of segs) s.on = false;
+        if (dissolveExploding) {
+          // Esplosione continua: push outward per frame
           for (const p of pts) {
             if (p.pinned) continue;
-            // Impulso outward dal centro + componente random
-            const fromCx = p.x - W * 0.5, fromCy = p.y - H * 0.45;
-            const d = Math.hypot(fromCx, fromCy) || 1;
-            const spd = 4 + Math.random() * 6;
-            p.px -= (fromCx / d) * spd * 0.6 + (Math.random() - 0.5) * spd;
-            p.py -= (fromCy / d) * spd * 0.4 + (Math.random() - 0.5) * spd;
-            p.heat = 0.8 + Math.random() * 0.2;
+            const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
+            const olen = Math.hypot(odx, ody) + 0.5;
+            p.px -= (odx / olen) * 5.0 + (Math.random() - 0.5) * 2.5;
+            p.py -= (ody / olen) * 4.0 + (Math.random() - 0.5) * 2.5;
+            p.heat = Math.min(1, p.heat + 0.025);
+          }
+        } else {
+          // Pre-wave + slacken
+          for (const p of pts) {
+            if (p.pinned) continue;
+            if (dissolveT < p.dissolveDelay) {
+              // Pre-wave: vibrazione noise
+              const nx = (Math.sin(p.ix * 13.7 + dissolveT * 5.1) - 0.5) * 1.2;
+              const ny = (Math.sin(p.iy * 19.3 + dissolveT * 4.7 + 2.1) - 0.5) * 1.2;
+              p.x += nx; p.y += ny;
+            } else {
+              // Slacken: deriva lenta outward (identico HeroGridNebula outF=0.0028 scalato px)
+              const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
+              const olen = Math.hypot(odx, ody) + 0.5;
+              p.x += (odx / olen) * 0.9;
+              p.y += (ody / olen) * 0.9;
+              p.heat = Math.min(1, p.heat + 0.008);
+            }
           }
         }
 
-        // Fisica normale (gravity + damping) durante tutto il rebuild
+        // Applica fisica base (gravity + damping) durante dissolve
         for (const p of pts) {
           if (p.pinned) continue;
           const vx = (p.x - p.px) * DAMPING;
           const vy = (p.y - p.py) * DAMPING;
           p.px = p.x; p.py = p.y;
           p.x += vx; p.y += vy + GRAVITY;
-          p.heat *= 0.97;
+          p.heat *= 0.98;
         }
 
-        if (rebuildElapsed > REBUILD_BURST) {
-          // Convergenza stile HeroGridNebula: attrazione crescente verso target
-          const reformT = Math.min(1, (rebuildElapsed - REBUILD_BURST) / REBUILD_REFORM);
-          const str = reformT * reformT * 0.28;
+        // Misura displacement dal grid iniziale
+        let dissolvedCount = 0, unpinned = 0;
+        for (const p of pts) {
+          if (p.pinned) continue;
+          unpinned++;
+          if (Math.hypot(p.x - p.ix, p.y - p.iy) > 60) dissolvedCount++;
+        }
+        const dissolveRatio = dissolvedCount / (unpinned || 1);
+
+        // 40%: kick esplosione totale (una volta sola)
+        if (!dissolveExploding && dissolveRatio >= 0.40) {
+          dissolveExploding = true;
           for (const p of pts) {
             if (p.pinned) continue;
-            const ddx = p.lx - p.x, ddy = p.ly - p.y;
-            p.x += ddx * str;
-            p.y += ddy * str;
-            p.y -= GRAVITY * Math.min(1, reformT * 1.5); // controgravità crescente
-            p.px += ddx * str * 0.5;
-            p.py += ddy * str * 0.5;
-          }
-          // Segmenti si ri-attivano man mano che i nodi convergono
-          for (const s of segs) {
-            if (s.on) continue;
-            const pa = pts[s.a], pb = pts[s.b];
-            if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < s.rest * 1.15) {
-              s.on = true; s.ten = 0;
-            }
+            const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
+            const olen = Math.hypot(odx, ody) + 0.5;
+            const str = 5.0 + Math.random() * 4.0;
+            p.px -= (odx / olen) * str + (Math.random() - 0.5) * 3;
+            p.py -= (ody / olen) * str + (Math.random() - 0.5) * 3;
           }
         }
 
-        if (rebuildElapsed >= REBUILD_TOTAL) {
-          // Fine rebuild: nessuno snap, lascia la fisica stabilizzarsi
-          rebuilding = false;
-          rebuildElapsed = 0;
-          burstApplied = false;
+        // 78%: reconstruct — riparte dall'inizio come HeroGridNebula
+        if (dissolveExploding && dissolveRatio >= 0.78) {
+          const d = build(W, H);
+          pts = d.pts; segs = d.segs;
+          assignTargets(pts, letterPixels);
+          dissolveTriggered = false;
+          dissolveExploding = false;
+          dissolveT = 0;
+          t0 = null; // restart animazione completa
         }
 
-        applyConstraints();
-        render(phase);
+        render(dissolveTriggered);
         return;
       }
 
@@ -245,12 +268,10 @@ export function ClothDemo2() {
             const ddx = p.lx - p.x, ddy = p.ly - p.y;
             p.x += ddx * str;
             p.y += ddy * str;
-            // Controgravità proporzionale all'attraction — nodi lettera tengono posizione
             p.y -= GRAVITY * Math.min(1, str / 0.20) * heatMask;
             p.px += ddx * str * 0.58;
             p.py += ddy * str * 0.58;
           } else if (phase === 1) {
-            // Fase formazione: piccola extra gravity per separare non-lettera
             const extraG = Math.min(0.10, t * t * 0.12);
             p.y += extraG;
           }
@@ -265,7 +286,6 @@ export function ClothDemo2() {
             p.x += (mx - p.x) * prox * 0.75;
             p.y += (my - p.y) * prox * 0.75;
           } else {
-            // Hover: movimento gentile
             const inv = 1 / (md2 || 0.001);
             p.x += ddx * inv * prox * 0.77;
             p.y += ddy * inv * prox * 0.77;
@@ -292,23 +312,7 @@ export function ClothDemo2() {
         }
       }
 
-      applyConstraints();
-
-      // ── Rebuild trigger ────────────────────────────────────────────────
-      if (phase === 2 && ready && totalSegs > 0) {
-        let broken = 0;
-        for (const s of segs) if (!s.on) broken++;
-        if (broken / totalSegs >= 0.10) {
-          rebuilding = true;
-          rebuildElapsed = 0;
-          burstApplied = false;
-        }
-      }
-
-      render(phase);
-    }
-
-    function applyConstraints() {
+      // ── Constraints ───────────────────────────────────────────────────
       for (let it = 0; it < ITER; it++) {
         for (const s of segs) {
           if (!s.on) continue;
@@ -324,11 +328,39 @@ export function ClothDemo2() {
           if (!pb.pinned) { pb.x += ox; pb.y += oy; }
         }
       }
+
+      // ── Dissolve trigger (70% segs rotti) ─────────────────────────────
+      if (phase === 2 && ready && !dissolveTriggered) {
+        let broken = 0;
+        for (const s of segs) if (!s.on) broken++;
+        if (broken / segs.length >= 0.70) {
+          dissolveTriggered = true;
+          dissolveT = 0;
+          // Centroide nodi caldi
+          let hcx = 0, hcy = 0, hc = 0;
+          for (const p of pts) {
+            if (!p.pinned && p.heat > 0.2) { hcx += p.x; hcy += p.y; hc++; }
+          }
+          dissolveOriginX = hc > 0 ? hcx / hc : W * 0.5;
+          dissolveOriginY = hc > 0 ? hcy / hc : H * 0.45;
+          // delay per-nodo basato su distanza dal centroide
+          const maxDist = Math.hypot(W, H);
+          for (const p of pts) {
+            p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 0.9;
+          }
+        }
+      }
+
+      render(false);
     }
 
-    function render(phase: number) {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = "#0b0d14";
+    function render(inDissolve: boolean) {
+      // Trail lungo durante dissolve, clear completo altrimenti
+      if (inDissolve) {
+        ctx.fillStyle = "rgba(11,13,20,0.06)";
+      } else {
+        ctx.fillStyle = "#0b0d14";
+      }
       ctx.fillRect(0, 0, W, H);
       ctx.lineCap = "round";
 
@@ -337,22 +369,15 @@ export function ClothDemo2() {
         const pa = pts[s.a], pb = pts[s.b];
         const h = Math.max(s.ten, (pa.heat + pb.heat) * 0.5);
 
-        // Calore: blu (freddo) → rosso (bordo) → giallo (medio) → bianco (centro)
+        // Calore: blu → rosso → giallo → bianco (dal bordo verso il centro)
         let r: number, g: number, b: number;
         if (h > 0.72) {
-          // giallo → bianco
           const f = (h - 0.72) / 0.28;
-          r = 255;
-          g = Math.round(210 + (255 - 210) * f);
-          b = Math.round(0 + 255 * f);
+          r = 255; g = Math.round(210 + (255 - 210) * f); b = Math.round(255 * f);
         } else if (h > 0.38) {
-          // rosso → giallo
           const f = (h - 0.38) / 0.34;
-          r = 230;
-          g = Math.round(40 + (210 - 40) * f);
-          b = 0;
+          r = 230; g = Math.round(40 + (210 - 40) * f); b = 0;
         } else if (h > 0.12) {
-          // blu → rosso
           const f = (h - 0.12) / 0.26;
           r = Math.round(58 + (230 - 58) * f);
           g = Math.round(134 * (1 - f));
@@ -374,20 +399,6 @@ export function ClothDemo2() {
         ctx.lineWidth = lw; ctx.stroke();
       }
 
-      // Nodi sciolti durante rebuild (burst): puntini glowing
-      if (rebuilding && !segs.some(s => s.on)) {
-        for (const p of pts) {
-          if (p.pinned) continue;
-          const h = p.heat;
-          let r = 58, g = 134, b = 214;
-          if (h > 0.5) { r = 200; g = 60; b = 60; }
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 1.5 + h * 2, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${r},${g},${b},${0.4 + h * 0.5})`;
-          ctx.fill();
-        }
-      }
-
       // Pin nodes
       for (const p of pts) {
         if (!p.pinned) continue;
@@ -401,7 +412,6 @@ export function ClothDemo2() {
         ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.lineWidth = 1; ctx.stroke();
-
         ctx.beginPath(); ctx.arc(cmx, cmy, 2.5, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
       }
