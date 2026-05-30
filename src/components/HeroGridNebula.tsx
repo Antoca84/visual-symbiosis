@@ -451,19 +451,19 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             n.vx *= 0.90; n.vy *= 0.90;
             n.x += n.vx; n.y += n.vy;
           } else {
-            // Onda arrivata: nodo scatta outward DAL CENTROIDE HOTSPOT
+            // Slacken: deriva lenta dal centroide hotspot (rete che si slaccia)
             const odx = n.rx - dissolveOriginRx;
             const ody = n.ry - dissolveOriginRy;
             const olen = Math.sqrt(odx * odx + ody * ody) + 0.05;
-            const outF = 0.016 * (1 + (n.burnCount >= 1 ? 1.2 : 0));
-            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.008;
-            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.008;
+            const outF = 0.0028; // forza piccola → deriva lenta, non esplosione
+            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.005;
+            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.005;
             n.vx += (odx / olen) * outF + nx;
             n.vy += (ody / olen) * outF + ny;
-            n.vz += (_hs(n.rx * 7.1 + t * 2.3) - 0.5) * 0.018;
-            n.vx *= 0.989; n.vy *= 0.989; n.vz *= 0.989;
+            n.vz += (_hs(n.rx * 7.1 + t * 2.3) - 0.5) * 0.006;
+            n.vx *= 0.97; n.vy *= 0.97; n.vz *= 0.97;
             n.x += n.vx; n.y += n.vy; n.z += n.vz;
-            n.heat = Math.min(1, n.heat + 0.018);
+            n.heat = Math.min(1, n.heat + 0.008);
           }
         }
       }
@@ -540,21 +540,21 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       if (phase === "dissolve") {
         let dissolvedCount = 0;
         for (const n of nodes) {
-          if (Math.hypot(n.x - n.rx, n.y - n.ry) > 1.8) dissolvedCount++;
+          if (Math.hypot(n.x - n.rx, n.y - n.ry) > 2.8) dissolvedCount++;
         }
         const dissolveRatio = dissolvedCount / N_NODES;
 
-        // 40%: scatta esplosione totale, kick a tutti i nodi ancora vicini alla griglia
+        // 40%: esplosione totale, kick outward dal centroide a tutti i nodi rimasti
         if (!dissolveExploding && dissolveRatio >= 0.4) {
           dissolveExploding = true;
           for (const n of nodes) {
-            if (Math.hypot(n.x - n.rx, n.y - n.ry) < 1.2) {
-              const angle = Math.atan2(n.y, n.x) + (Math.random() - 0.5) * 0.9;
-              const str = 0.07 + Math.random() * 0.10;
-              n.vx += Math.cos(angle) * str;
-              n.vy += Math.sin(angle) * str;
-              n.vz += (Math.random() - 0.5) * str * 0.7;
-            }
+            const odx = n.rx - dissolveOriginRx;
+            const ody = n.ry - dissolveOriginRy;
+            const olen = Math.sqrt(odx * odx + ody * ody) + 0.05;
+            const str = 0.10 + Math.random() * 0.08;
+            n.vx += (odx / olen) * str + (Math.random() - 0.5) * 0.04;
+            n.vy += (ody / olen) * str + (Math.random() - 0.5) * 0.04;
+            n.vz += (Math.random() - 0.5) * str * 0.8;
           }
         }
 
