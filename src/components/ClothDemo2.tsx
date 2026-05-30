@@ -168,57 +168,60 @@ export function ClothDemo2() {
         rebuildElapsed += dt;
 
         if (!burstApplied) {
-          // Impulso outward + random — una volta sola all'inizio
           burstApplied = true;
           for (const s of segs) s.on = false;
           for (const p of pts) {
             if (p.pinned) continue;
-            const angle = Math.random() * Math.PI * 2;
-            const spd = 3 + Math.random() * 5;
-            // Modifica px/py per iniettare velocità Verlet
-            p.px -= Math.cos(angle) * spd;
-            p.py -= Math.sin(angle) * spd;
-            p.heat = Math.min(1, p.heat + 0.6);
+            // Impulso outward dal centro + componente random
+            const fromCx = p.x - W * 0.5, fromCy = p.y - H * 0.45;
+            const d = Math.hypot(fromCx, fromCy) || 1;
+            const spd = 4 + Math.random() * 6;
+            p.px -= (fromCx / d) * spd * 0.6 + (Math.random() - 0.5) * spd;
+            p.py -= (fromCy / d) * spd * 0.4 + (Math.random() - 0.5) * spd;
+            p.heat = 0.8 + Math.random() * 0.2;
           }
         }
 
+        // Fisica normale (gravity + damping) durante tutto il rebuild
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const vx = (p.x - p.px) * DAMPING;
+          const vy = (p.y - p.py) * DAMPING;
+          p.px = p.x; p.py = p.y;
+          p.x += vx; p.y += vy + GRAVITY;
+          p.heat *= 0.97;
+        }
+
         if (rebuildElapsed > REBUILD_BURST) {
-          // Fase convergenza: attrazione forte verso target lettera
+          // Convergenza stile HeroGridNebula: attrazione crescente verso target
           const reformT = Math.min(1, (rebuildElapsed - REBUILD_BURST) / REBUILD_REFORM);
-          const str = reformT * reformT * 0.30;
+          const str = reformT * reformT * 0.28;
           for (const p of pts) {
             if (p.pinned) continue;
             const ddx = p.lx - p.x, ddy = p.ly - p.y;
             p.x += ddx * str;
             p.y += ddy * str;
+            p.y -= GRAVITY * Math.min(1, reformT * 1.5); // controgravità crescente
             p.px += ddx * str * 0.5;
             p.py += ddy * str * 0.5;
-            // Cancella gravity durante la convergenza
-            p.y -= GRAVITY * reformT;
           }
-          // Ri-abilita segmenti quando i nodi si riavvicinano
+          // Segmenti si ri-attivano man mano che i nodi convergono
           for (const s of segs) {
             if (s.on) continue;
             const pa = pts[s.a], pb = pts[s.b];
-            if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < s.rest * 1.2) {
+            if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < s.rest * 1.15) {
               s.on = true; s.ten = 0;
             }
           }
         }
 
         if (rebuildElapsed >= REBUILD_TOTAL) {
+          // Fine rebuild: nessuno snap, lascia la fisica stabilizzarsi
           rebuilding = false;
           rebuildElapsed = 0;
           burstApplied = false;
-          // Snap finale: letter nodes sulla target, azzera velocità
-          for (const p of pts) {
-            if (p.pinned) continue;
-            if (p.ld < 28) { p.x = p.lx; p.y = p.ly; }
-            p.px = p.x; p.py = p.y;
-          }
         }
 
-        // Applica constraints e renderizza (niente mouse durante rebuild)
         applyConstraints();
         render(phase);
         return;
@@ -284,7 +287,7 @@ export function ClothDemo2() {
           if (dist > tear) { s.on = false; continue; }
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 18) s.on = false;
+            if (Math.hypot(cmx - mx, cmy - my) < 30) s.on = false;
           }
         }
       }
@@ -295,7 +298,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && totalSegs > 0) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / totalSegs >= 0.25) {
+        if (broken / totalSegs >= 0.10) {
           rebuilding = true;
           rebuildElapsed = 0;
           burstApplied = false;
