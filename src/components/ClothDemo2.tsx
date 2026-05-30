@@ -2,14 +2,19 @@ import { useEffect, useRef } from "react";
 
 const COLS = 60;
 const ROWS = 28;
-const GRAVITY = 0.13;
-const DAMPING = 0.986;
-const ITER    = 6;
+const GRAVITY = 0.22;
+const DAMPING = 0.985;
+const ITER = 6;
 const MOUSE_R = 60;
 const TEAR_MULT = 1.5;
 
-const T_SETTLE  = 1.4;
-const T_ATTRACT = 3.0;
+const T_SETTLE  = 1.2;
+const T_ATTRACT = 2.8;
+
+// Rebuild timing (secondi relativi)
+const REBUILD_BURST   = 0.7;   // burst outward
+const REBUILD_REFORM  = 1.8;   // convergenza verso lettere
+const REBUILD_TOTAL   = REBUILD_BURST + REBUILD_REFORM;
 
 interface Pt {
   x: number; y: number;
@@ -29,13 +34,13 @@ interface Seg {
 
 function build(W: number, H: number) {
   const sx = W / (COLS - 1);
-  const sy = (H * 0.70) / (ROWS - 1);
-  const ox = 0, oy = H * 0.04;
+  const sy = (H * 0.65) / (ROWS - 1);
+  const oy = H * 0.05;
 
   const pts: Pt[] = [];
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++) {
-      const x = ox + c * sx, y = oy + r * sy;
+      const x = c * sx, y = oy + r * sy;
       pts.push({ x, y, px: x, py: y,
         pinned: r === 0 && c % 3 === 0,
         lx: x, ly: y, ld: Infinity, heat: 0 });
@@ -66,7 +71,7 @@ async function sampleLetters(W: number, H: number): Promise<{ x: number; y: numb
   ox.font = `italic ${fs}px "Cormorant Garamond", serif`;
   ox.textAlign = "center";
   ox.textBaseline = "middle";
-  const cy = H * 0.44;
+  const cy = H * 0.42;
   ox.fillText("INDUSTRIAL", W / 2, cy - fs * 0.7);
   ox.fillText("MAGIC",      W / 2, cy + fs * 0.7);
   const d = ox.getImageData(0, 0, W, H).data;
@@ -104,18 +109,19 @@ export function ClothDemo2() {
     let t0: number | null = null;
     let ready = false;
     let rebuilding = false;
-    let rebuildT = 0;
+    let rebuildElapsed = 0;   // secondi dall'inizio rebuild
     let totalSegs = 0;
-    let phase2Init = false;
+    let burstApplied = false; // impulso outward applicato una volta sola
 
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
       const dpr = Math.min(devicePixelRatio || 1, 2);
       canvas.width = W * dpr; canvas.height = H * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const d = build(W, H); pts = d.pts; segs = d.segs;
       totalSegs = segs.length;
-      ready = false; t0 = null; rebuilding = false; rebuildT = 0; phase2Init = false;
+      ready = false; t0 = null;
+      rebuilding = false; rebuildElapsed = 0; burstApplied = false;
       sampleLetters(W, H).then(lp => { assignTargets(pts, lp); ready = true; });
     };
     resize();
@@ -143,9 +149,13 @@ export function ClothDemo2() {
     });
     canvas.addEventListener("touchend", () => { mou.current.down = false; });
 
+    let lastTs = 0;
+
     function frame(ts: number) {
       raf.current = requestAnimationFrame(frame);
       if (t0 === null) t0 = ts;
+      const dt = Math.min((ts - lastTs) / 1000, 0.05); // cap dt
+      lastTs = ts;
       const el = (ts - t0) / 1000;
       const { x: mx, y: my, down } = mou.current;
 
@@ -153,42 +163,64 @@ export function ClothDemo2() {
         : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
-      // ── Rebuild physics (priorità su tutto il resto) ───────────────────
+      // ── Rebuild ───────────────────────────────────────────────────────
       if (rebuilding) {
-        rebuildT = Math.min(1, rebuildT + 0.007);
-        const laserX = rebuildT * W;
+        rebuildElapsed += dt;
 
-        // Ogni nodo a sinistra del laser: attratta verso target lettera
-        for (const p of pts) {
-          if (p.pinned) continue;
-          if (p.lx <= laserX) {
-            const str = 0.18;
+        if (!burstApplied) {
+          // Impulso outward + random — una volta sola all'inizio
+          burstApplied = true;
+          for (const s of segs) s.on = false;
+          for (const p of pts) {
+            if (p.pinned) continue;
+            const angle = Math.random() * Math.PI * 2;
+            const spd = 3 + Math.random() * 5;
+            // Modifica px/py per iniettare velocità Verlet
+            p.px -= Math.cos(angle) * spd;
+            p.py -= Math.sin(angle) * spd;
+            p.heat = Math.min(1, p.heat + 0.6);
+          }
+        }
+
+        if (rebuildElapsed > REBUILD_BURST) {
+          // Fase convergenza: attrazione forte verso target lettera
+          const reformT = Math.min(1, (rebuildElapsed - REBUILD_BURST) / REBUILD_REFORM);
+          const str = reformT * reformT * 0.30;
+          for (const p of pts) {
+            if (p.pinned) continue;
             const ddx = p.lx - p.x, ddy = p.ly - p.y;
             p.x += ddx * str;
             p.y += ddy * str;
-            p.px += ddx * str * 0.6;
-            p.py += ddy * str * 0.6;
+            p.px += ddx * str * 0.5;
+            p.py += ddy * str * 0.5;
+            // Cancella gravity durante la convergenza
+            p.y -= GRAVITY * reformT;
+          }
+          // Ri-abilita segmenti quando i nodi si riavvicinano
+          for (const s of segs) {
+            if (s.on) continue;
+            const pa = pts[s.a], pb = pts[s.b];
+            if (Math.hypot(pa.x - pb.x, pa.y - pb.y) < s.rest * 1.2) {
+              s.on = true; s.ten = 0;
+            }
           }
         }
 
-        // Segmenti healed quando il loro target midX supera il laser
-        for (const s of segs) {
-          const targetMidX = (pts[s.a].lx + pts[s.b].lx) * 0.5;
-          if (!s.on && targetMidX < laserX) {
-            s.on = true;
-            s.ten = 0;
+        if (rebuildElapsed >= REBUILD_TOTAL) {
+          rebuilding = false;
+          rebuildElapsed = 0;
+          burstApplied = false;
+          // Snap finale: letter nodes sulla target, azzera velocità
+          for (const p of pts) {
+            if (p.pinned) continue;
+            if (p.ld < 40) { p.x = p.lx; p.y = p.ly; }
+            p.px = p.x; p.py = p.y;
           }
         }
 
-        if (rebuildT >= 1) rebuilding = false;
-
-        // Salta fisica interattiva durante rebuild
-        ctx.clearRect(0, 0, W, H);
-        ctx.fillStyle = "#0b0d14";
-        ctx.fillRect(0, 0, W, H);
-        ctx.lineCap = "round";
-        renderSegs();
-        renderLaser(laserX);
+        // Applica constraints e renderizza (niente mouse durante rebuild)
+        applyConstraints();
+        render(phase);
         return;
       }
 
@@ -200,43 +232,23 @@ export function ClothDemo2() {
         p.px = p.x; p.py = p.y;
         p.x += vx; p.y += vy + GRAVITY;
 
-        if (phase === 2) {
-          // Snap una-tantum: porta letter nodes a target, azzera velocità di tutti
-          if (!phase2Init && ready) {
-            phase2Init = true;
-            for (const q of pts) {
-              if (q.pinned) continue;
-              if (q.ld < 40) { q.x = q.lx; q.y = q.ly; }
-              q.px = q.x; q.py = q.y; // azzera velocità Verlet
-            }
-          }
-          // Fase interattiva: cancella gravity per tutti → cloth fluttua stabile
-          p.y -= GRAVITY;
-          // Nodi lettera: attraction mantiene la forma (si azzera sotto mouse)
-          if (ready && p.ld < 40) {
-            const heatMask = Math.max(0, 1 - p.heat * 4);
-            const str = 0.22 * heatMask;
-            const ddx = p.lx - p.x, ddy = p.ly - p.y;
-            p.x += ddx * str;
-            p.y += ddy * str;
-            p.px += ddx * str * 0.4;
-            p.py += ddy * str * 0.4;
-          }
-        } else if (ready && at > 0.04) {
-          // Fase formazione lettera
+        // Attrazione lettera
+        if (ready && at > 0.04) {
           const t = Math.max(0, at - 0.04) / 0.96;
           const isLetter = p.ld < 40;
           if (isLetter) {
-            const str = Math.min(0.32, t * t * 0.38);
+            const heatMask = phase === 2 ? Math.max(0, 1 - p.heat * 4) : 1;
+            const str = Math.min(0.38, t * t * 0.42) * heatMask;
             const ddx = p.lx - p.x, ddy = p.ly - p.y;
             p.x += ddx * str;
             p.y += ddy * str;
-            p.y -= GRAVITY * Math.min(1, t * 2);
-            p.px += ddx * str * 0.5;
-            p.py += ddy * str * 0.5;
-          } else {
-            // Extra gravity limitata — non trascina via i nodi lettera via constraints
-            const extraG = Math.min(0.12, t * t * 0.15);
+            // Controgravità proporzionale all'attraction — nodi lettera tengono posizione
+            p.y -= GRAVITY * Math.min(1, str / 0.20) * heatMask;
+            p.px += ddx * str * 0.45;
+            p.py += ddy * str * 0.45;
+          } else if (phase === 1) {
+            // Fase formazione: piccola extra gravity per separare non-lettera
+            const extraG = Math.min(0.10, t * t * 0.12);
             p.y += extraG;
           }
         }
@@ -247,12 +259,12 @@ export function ClothDemo2() {
         if (md2 < MOUSE_R) {
           const prox = (1 - md2 / MOUSE_R);
           if (down) {
-            p.x += (mx - p.x) * prox * 0.80;
-            p.y += (my - p.y) * prox * 0.80;
+            p.x += (mx - p.x) * prox * 0.75;
+            p.y += (my - p.y) * prox * 0.75;
           } else {
             const inv = 1 / (md2 || 0.001);
-            p.x += ddx * inv * prox * 2.2;
-            p.y += ddy * inv * prox * 2.2;
+            p.x += ddx * inv * prox * 2.0;
+            p.y += ddy * inv * prox * 2.0;
           }
           p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
@@ -260,7 +272,7 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Pre-constraint tear pass ───────────────────────────────────────
+      // ── Pre-constraint tear ────────────────────────────────────────────
       if (phase === 2) {
         for (const s of segs) {
           if (!s.on) continue;
@@ -269,17 +281,30 @@ export function ClothDemo2() {
           const tear = s.rest * TEAR_MULT;
           s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
           if (dist > tear) { s.on = false; continue; }
-          // Tear diretto: il midpoint del segmento passa vicino al mouse durante drag
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 18) {
-              s.on = false;
-            }
+            if (Math.hypot(cmx - mx, cmy - my) < 18) s.on = false;
           }
         }
       }
 
-      // ── Constraints ───────────────────────────────────────────────────
+      applyConstraints();
+
+      // ── Rebuild trigger ────────────────────────────────────────────────
+      if (phase === 2 && ready && totalSegs > 0) {
+        let broken = 0;
+        for (const s of segs) if (!s.on) broken++;
+        if (broken / totalSegs >= 0.25) {
+          rebuilding = true;
+          rebuildElapsed = 0;
+          burstApplied = false;
+        }
+      }
+
+      render(phase);
+    }
+
+    function applyConstraints() {
       for (let it = 0; it < ITER; it++) {
         for (const s of segs) {
           if (!s.on) continue;
@@ -295,42 +320,14 @@ export function ClothDemo2() {
           if (!pb.pinned) { pb.x += ox; pb.y += oy; }
         }
       }
+    }
 
-      // ── Rebuild trigger ────────────────────────────────────────────────
-      if (phase === 2 && ready && totalSegs > 0 && !rebuilding) {
-        let broken = 0;
-        for (const s of segs) if (!s.on) broken++;
-        if (broken / totalSegs >= 0.25) {
-          rebuilding = true;
-          rebuildT = 0;
-          console.log("[cloth] rebuild triggered", broken, "/", totalSegs);
-        }
-      }
-
-      // ── Draw ──────────────────────────────────────────────────────────
+    function render(phase: number) {
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = "#0b0d14";
       ctx.fillRect(0, 0, W, H);
       ctx.lineCap = "round";
-      renderSegs();
 
-      // Pin nodes
-      for (const p of pts) {
-        if (!p.pinned) continue;
-        ctx.fillStyle = "rgba(58,134,214,0.45)";
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
-      }
-
-      // Debug HUD
-      if (phase === 2) {
-        let broken = 0; for (const s of segs) if (!s.on) broken++;
-        ctx.fillStyle = "rgba(255,255,255,0.55)";
-        ctx.font = "11px monospace";
-        ctx.fillText(`ph:${phase} rdy:${ready} torn:${(broken/totalSegs*100).toFixed(0)}% segs:${totalSegs}`, 10, H - 12);
-      }
-    }
-
-    function renderSegs() {
       for (const s of segs) {
         if (!s.on) continue;
         const pa = pts[s.a], pb = pts[s.b];
@@ -363,19 +360,35 @@ export function ClothDemo2() {
         ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
         ctx.lineWidth = lw; ctx.stroke();
       }
-    }
 
-    function renderLaser(laserX: number) {
-      const grad = ctx.createLinearGradient(laserX - 48, 0, laserX + 10, 0);
-      grad.addColorStop(0, "rgba(58,134,214,0)");
-      grad.addColorStop(0.6, "rgba(120,200,255,0.35)");
-      grad.addColorStop(1, "rgba(220,245,255,0.90)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(laserX - 48, 0, 58, H);
-      ctx.beginPath();
-      ctx.moveTo(laserX, 0); ctx.lineTo(laserX, H);
-      ctx.strokeStyle = "rgba(220,245,255,0.95)";
-      ctx.lineWidth = 2; ctx.stroke();
+      // Nodi sciolti durante rebuild (burst): puntini glowing
+      if (rebuilding && !segs.some(s => s.on)) {
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const h = p.heat;
+          let r = 58, g = 134, b = 214;
+          if (h > 0.5) { r = 200; g = 60; b = 60; }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 1.5 + h * 2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${r},${g},${b},${0.4 + h * 0.5})`;
+          ctx.fill();
+        }
+      }
+
+      // Pin nodes
+      for (const p of pts) {
+        if (!p.pinned) continue;
+        ctx.fillStyle = "rgba(58,134,214,0.45)";
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Debug HUD
+      if (phase === 2) {
+        let broken = 0; for (const s of segs) if (!s.on) broken++;
+        ctx.fillStyle = "rgba(255,255,255,0.45)";
+        ctx.font = "11px monospace";
+        ctx.fillText(`ph:${phase} rdy:${ready} torn:${(broken/totalSegs*100).toFixed(0)}% rebuild:${rebuilding}`, 10, H - 12);
+      }
     }
 
     raf.current = requestAnimationFrame(frame);
