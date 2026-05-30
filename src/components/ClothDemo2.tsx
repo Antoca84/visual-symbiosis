@@ -287,8 +287,8 @@ export function ClothDemo2() {
             p.y += (my - p.y) * prox * 0.75;
           } else {
             const inv = 1 / (md2 || 0.001);
-            p.x += ddx * inv * prox * 0.77;
-            p.y += ddy * inv * prox * 0.77;
+            p.x += ddx * inv * prox * 1.8;
+            p.y += ddy * inv * prox * 1.8;
           }
           p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
@@ -329,11 +329,11 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Dissolve trigger (70% segs rotti) ─────────────────────────────
+      // ── Dissolve trigger (40% segs rotti) ─────────────────────────────
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.70) {
+        if (broken / segs.length >= 0.40) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
@@ -343,9 +343,10 @@ export function ClothDemo2() {
           }
           dissolveOriginX = hc > 0 ? hcx / hc : W * 0.5;
           dissolveOriginY = hc > 0 ? hcy / hc : H * 0.45;
-          // delay per-nodo basato su distanza dal centroide
           const maxDist = Math.hypot(W, H);
           for (const p of pts) {
+            // ix/iy = posizione CORRENTE al trigger (non griglia iniziale)
+            p.ix = p.x; p.iy = p.y;
             p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 0.9;
           }
         }
