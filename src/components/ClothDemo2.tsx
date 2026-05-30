@@ -1,15 +1,15 @@
 import { useEffect, useRef } from "react";
 
 const COLS = 60;
-const ROWS = 32;
-const GRAVITY = 0.26;
-const DAMPING = 0.984;
-const ITER    = 5;
+const ROWS = 28;
+const GRAVITY = 0.13;
+const DAMPING = 0.986;
+const ITER    = 6;
 const MOUSE_R = 90;
-const TEAR_MULT = 2.1;  // restLen × TEAR_MULT = rottura
+const TEAR_MULT = 2.1;
 
-const T_SETTLE  = 1.8;  // cloth scende e si stabilizza
-const T_ATTRACT = 2.4;  // attrazione verso lettere
+const T_SETTLE  = 1.4;
+const T_ATTRACT = 3.0;
 
 interface Pt {
   x: number; y: number;
@@ -37,7 +37,7 @@ function build(W: number, H: number) {
     for (let c = 0; c < COLS; c++) {
       const x = ox + c * sx, y = oy + r * sy;
       pts.push({ x, y, px: x, py: y,
-        pinned: r === 0 && c % 5 === 0,
+        pinned: r === 0 && c % 3 === 0,
         lx: x, ly: y, ld: Infinity, heat: 0 });
     }
 
@@ -157,19 +157,23 @@ export function ClothDemo2() {
         p.x += vx; p.y += vy + GRAVITY;
 
         // Attrazione lettera / extra-gravity fuori lettera
-        if (ready && at > 0.05) {
-          const t = Math.max(0, at - 0.05) / 0.95;
-          const isLetter = p.ld < 20;
+        if (ready && at > 0.04) {
+          const t = Math.max(0, at - 0.04) / 0.96;
+          const isLetter = p.ld < 18;
           if (isLetter) {
-            const str = t * t * 0.09;
-            p.x += (p.lx - p.x) * str;
-            p.y += (p.ly - p.y) * str;
-            // Dampen Verlet velocity nella direzione target
-            p.px += (p.lx - p.x) * str * 0.4;
-            p.py += (p.ly - p.y) * str * 0.4;
+            // Forza forte verso target + cancella gravity gradualmente
+            const str = Math.min(0.32, t * t * 0.38);
+            const dx = p.lx - p.x, dy = p.ly - p.y;
+            p.x += dx * str;
+            p.y += dy * str;
+            // Cancella gravity proporzionalmente all'attrazione
+            p.y -= GRAVITY * Math.min(1, t * 2);
+            // Smorza velocità Verlet verso target
+            p.px += dx * str * 0.5;
+            p.py += dy * str * 0.5;
           } else {
             // Non-lettera: extra gravity — cade più in fretta
-            const extraG = Math.min(0.9, t * t * p.ld * 0.007);
+            const extraG = Math.min(0.7, t * t * p.ld * 0.0045);
             p.y += extraG;
           }
         }
@@ -264,7 +268,7 @@ export function ClothDemo2() {
   return (
     <canvas
       ref={cvs}
-      className="w-full h-full block cursor-crosshair"
+      className="absolute inset-0 w-full h-full block cursor-crosshair"
       style={{ touchAction: "none" }}
     />
   );
