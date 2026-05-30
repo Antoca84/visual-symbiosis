@@ -51,6 +51,7 @@ interface Pt {
   ix: number; iy: number;   // posizione GRIGLIA (invariante, usata per assignTargets)
   heat: number;
   dissolveDelay: number;
+  letterDelay: number;      // stagger individuale per attrazione lettera (come HeroGridNebula)
 }
 interface Seg { a: number; b: number; rest: number; on: boolean; ten: number; }
 
@@ -71,6 +72,7 @@ function build(W: number, H: number, scatter = false) {
         lx: gx, ly: gy, ld: Infinity,
         ix: gx, iy: gy,  // griglia: NON aggiornare in scatter
         heat: 0, dissolveDelay: 0,
+        letterDelay: Math.random() * 0.35,
       });
     }
 
@@ -262,7 +264,8 @@ export function ClothDemo2() {
       }
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
-      t0 = ts;
+      // Salta intro (fase 0/1) e va diretto a fase 2 con animazione onda
+      t0 = ts - (T_SETTLE + T_ATTRACT) * 1000;
     };
 
     const resize = () => {
@@ -323,9 +326,10 @@ export function ClothDemo2() {
       const phase = el < T_SETTLE ? 0 : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at    = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
-      // Constraints: floor 0.25 in fase 0 (evita free-fall), rampa in fase 1, pieno in fase 2
-      const constraintRamp = phase === 0 ? 0.25 : phase === 1 ? 0.25 + at * 0.75 : 1.0;
-      const letterAttrFade = 1.0; // heatMask gestisce fase 2 internamente
+      // Constraint ramp solo in fase 2 (fase 0/1 gestite da fbm2 drift)
+      if (phase === 2 && phase2StartT < 0) phase2StartT = ts;
+      const phase2Age      = phase2StartT >= 0 ? (ts - phase2StartT) / 1000 : 0;
+      const constraintRamp = phase === 2 ? Math.min(1, phase2Age / 1.5) : 0;
 
       // Idle wave
       const idleMs  = phase === 2 && !dissolveTriggered ? Math.max(0, ts - lastMouseT - 2000) : 0;
@@ -371,44 +375,79 @@ export function ClothDemo2() {
         return;
       }
 
-      // ── Physics ─────────────────────────────────────────────────────────
-      for (const p of pts) {
-        if (p.pinned) continue;
-        const vx = (p.x - p.px) * DAMPING, vy = (p.y - p.py) * DAMPING;
-        p.px = p.x; p.py = p.y;
-        p.x += vx; p.y += vy + GRAVITY;
-
-        // Attrazione lettera (fase 1+)
-        if (ready && at > 0.04) {
-          const t = Math.max(0, at - 0.04) / 0.96;
-          const isLetter = p.ld < 28;
-          if (isLetter) {
-            const str = Math.min(0.38, t * t * 0.42) * letterAttrFade;
-            const ddx = p.lx - p.x, ddy = p.ly - p.y;
-            p.x += ddx * str; p.y += ddy * str;
-            p.y -= GRAVITY * Math.min(1, str / 0.20) * letterAttrFade;
-            p.px += ddx * str * 0.58; p.py += ddy * str * 0.58;
-          } else if (phase === 1) {
-            p.y += Math.min(0.10, t * t * 0.12);
-          }
+      // ── Physics — split per fase (come HeroGridNebula) ──────────────────
+      if (phase === 0) {
+        // Float: fbm2 drift organico, no gravity, no constraints, boundary soft
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const nx = p.x / W, ny = p.y / H;
+          const S  = 0.5;
+          const fnx = (fbm2(nx * S + tAnim * 0.24, ny * S + 1.73) - 0.5) * 2;
+          const fny = (fbm2(nx * S + 7.31, ny * S + tAnim * 0.24 + 2.11) - 0.5) * 2;
+          const vx  = (p.x - p.px) * 0.968 + fnx * 1.1;
+          const vy  = (p.y - p.py) * 0.968 + fny * 0.8;
+          p.px = p.x; p.py = p.y;
+          p.x += vx; p.y += vy;
+          // Soft boundary: mantieni nodi nell'area centrale
+          const bdx = p.x - W * 0.5, bdy = p.y - H * 0.40;
+          const dN  = Math.hypot(bdx / W, bdy / H);
+          if (dN > 0.44) { const g = (dN - 0.44) * 0.022; p.x -= bdx * g; p.y -= bdy * g; }
         }
 
-        // Mouse
-        const ddx = p.x - mx, ddy = p.y - my;
-        const md2 = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (md2 < mouseR) {
-          const prox = 1 - md2 / mouseR;
-          if (down) {
-            p.x += (mx - p.x) * prox * 0.75;
-            p.y += (my - p.y) * prox * 0.75;
+      } else if (phase === 1) {
+        // Letter formation: staggered per-nodo, drift per non-lettera
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const nx = p.x / W, ny = p.y / H;
+          const S  = 0.5;
+          if (p.ld < 50 && ready) {
+            const localT = Math.max(0, (at - p.letterDelay) / Math.max(0.01, 1 - p.letterDelay));
+            if (localT > 0) {
+              const force = localT * localT * 0.17;
+              p.x += (p.lx - p.x) * force;
+              p.y += (p.ly - p.y) * force;
+            } else {
+              // ancora in float prima del proprio delay individuale
+              p.x += (fbm2(nx * S + tAnim * 0.22, ny * S + 1.73) - 0.5) * 2 * 0.85;
+              p.y += (fbm2(nx * S + 7.31, ny * S + tAnim * 0.22 + 2.11) - 0.5) * 2 * 0.65;
+            }
           } else {
-            const inv = 1 / (md2 || 0.001);
-            p.x += ddx * inv * prox * 1.8;
-            p.y += ddy * inv * prox * 1.8;
+            // Non-lettera: drift più lento + lieve discesa
+            p.x += (fbm2(nx * S + tAnim * 0.24, ny * S + 1.73) - 0.5) * 2 * 0.55;
+            p.y += (fbm2(nx * S + 7.31, ny * S + tAnim * 0.24 + 2.11) - 0.5) * 2 * 0.40;
+            p.y += 0.08; // lieve discesa
           }
-          p.heat = Math.min(1, p.heat + prox * 0.12);
-        } else {
-          p.heat *= 0.94;
+          const vx = (p.x - p.px) * 0.88;
+          const vy = (p.y - p.py) * 0.88;
+          p.px = p.x; p.py = p.y;
+          p.x += vx; p.y += vy;
+        }
+
+      } else {
+        // Fase 2: fisica cloth completa (gravity, mouse, constraints)
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const vx = (p.x - p.px) * DAMPING, vy = (p.y - p.py) * DAMPING;
+          p.px = p.x; p.py = p.y;
+          p.x += vx; p.y += vy + GRAVITY;
+
+          // Mouse
+          const ddx = p.x - mx, ddy = p.y - my;
+          const md2 = Math.sqrt(ddx * ddx + ddy * ddy);
+          if (md2 < mouseR) {
+            const prox = 1 - md2 / mouseR;
+            if (down) {
+              p.x += (mx - p.x) * prox * 0.75;
+              p.y += (my - p.y) * prox * 0.75;
+            } else {
+              const inv = 1 / (md2 || 0.001);
+              p.x += ddx * inv * prox * 1.8;
+              p.y += ddy * inv * prox * 1.8;
+            }
+            p.heat = Math.min(1, p.heat + prox * 0.12);
+          } else {
+            p.heat *= 0.94;
+          }
         }
       }
 
