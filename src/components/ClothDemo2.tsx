@@ -5,7 +5,6 @@ const ROWS = 28;
 const GRAVITY = 0.13;
 const DAMPING = 0.986;
 const ITER    = 6;
-const ITER_INTERACTIVE = 2;
 const MOUSE_R = 90;
 const TEAR_MULT = 1.5;
 
@@ -16,8 +15,8 @@ interface Pt {
   x: number; y: number;
   px: number; py: number;
   pinned: boolean;
-  lx: number; ly: number;  // letter target screen coords
-  ld: number;              // distanza dal target lettera
+  lx: number; ly: number;
+  ld: number;
   heat: number;
 }
 
@@ -153,6 +152,45 @@ export function ClothDemo2() {
         : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
+      // ── Rebuild physics (priorità su tutto il resto) ───────────────────
+      if (rebuilding) {
+        rebuildT = Math.min(1, rebuildT + 0.007);
+        const laserX = rebuildT * W;
+
+        // Ogni nodo a sinistra del laser: attratta verso target lettera
+        for (const p of pts) {
+          if (p.pinned) continue;
+          if (p.lx <= laserX) {
+            const str = 0.18;
+            const ddx = p.lx - p.x, ddy = p.ly - p.y;
+            p.x += ddx * str;
+            p.y += ddy * str;
+            p.px += ddx * str * 0.6;
+            p.py += ddy * str * 0.6;
+          }
+        }
+
+        // Segmenti healed quando il loro target midX supera il laser
+        for (const s of segs) {
+          const targetMidX = (pts[s.a].lx + pts[s.b].lx) * 0.5;
+          if (!s.on && targetMidX < laserX) {
+            s.on = true;
+            s.ten = 0;
+          }
+        }
+
+        if (rebuildT >= 1) rebuilding = false;
+
+        // Salta fisica interattiva durante rebuild
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = "#0b0d14";
+        ctx.fillRect(0, 0, W, H);
+        ctx.lineCap = "round";
+        renderSegs();
+        renderLaser(laserX);
+        return;
+      }
+
       // ── Physics ───────────────────────────────────────────────────────
       for (const p of pts) {
         if (p.pinned) continue;
@@ -162,43 +200,38 @@ export function ClothDemo2() {
         p.x += vx; p.y += vy + GRAVITY;
 
         // Attrazione lettera / extra-gravity fuori lettera
+        // Extra-gravity solo in fase 1 (formazione) — in fase 2 si ferma
         if (ready && at > 0.04) {
           const t = Math.max(0, at - 0.04) / 0.96;
           const isLetter = p.ld < 18;
           if (isLetter) {
-            // Forza forte verso target + cancella gravity gradualmente
-            // heatMask: mouse caldo azzera attraction → permette strappo
             const heatMask = Math.max(0, 1 - p.heat * 4);
             const str = Math.min(0.32, t * t * 0.38) * heatMask;
-            const dx = p.lx - p.x, dy = p.ly - p.y;
-            p.x += dx * str;
-            p.y += dy * str;
-            // Cancella gravity proporzionalmente all'attrazione
+            const ddx = p.lx - p.x, ddy = p.ly - p.y;
+            p.x += ddx * str;
+            p.y += ddy * str;
             p.y -= GRAVITY * Math.min(1, t * 2);
-            // Smorza velocità Verlet verso target
-            p.px += dx * str * 0.5;
-            p.py += dy * str * 0.5;
-          } else {
-            // Non-lettera: extra gravity — cade più in fretta
+            p.px += ddx * str * 0.5;
+            p.py += ddy * str * 0.5;
+          } else if (phase === 1) {
+            // Extra gravity solo durante fase di formazione
             const extraG = Math.min(0.7, t * t * p.ld * 0.0045);
             p.y += extraG;
           }
         }
 
         // Mouse
-        const dx = p.x - mx, dy = p.y - my;
-        const md2 = Math.sqrt(dx * dx + dy * dy);
+        const ddx = p.x - mx, ddy = p.y - my;
+        const md2 = Math.sqrt(ddx * ddx + ddy * ddy);
         if (md2 < MOUSE_R) {
           const prox = (1 - md2 / MOUSE_R);
           if (down) {
-            // Pull verso mouse → stira → strappa
             p.x += (mx - p.x) * prox * 0.80;
             p.y += (my - p.y) * prox * 0.80;
           } else {
-            // Push outward → arriccia la tela
             const inv = 1 / (md2 || 0.001);
-            p.x += dx * inv * prox * 2.2;
-            p.y += dy * inv * prox * 2.2;
+            p.x += ddx * inv * prox * 2.2;
+            p.y += ddy * inv * prox * 2.2;
           }
           p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
@@ -206,7 +239,7 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Pre-constraint tear pass (cattura tensione prima che venga normalizzata)
+      // ── Pre-constraint tear pass ───────────────────────────────────────
       if (phase === 2) {
         for (const s of segs) {
           if (!s.on) continue;
@@ -215,10 +248,9 @@ export function ClothDemo2() {
           const tear = s.rest * TEAR_MULT;
           s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
           if (dist > tear) { s.on = false; continue; }
-          // Tear diretto vicino al mouse durante drag
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 32 && dist > s.rest * 1.15) {
+            if (Math.hypot(cmx - mx, cmy - my) < 32 && dist > s.rest * 1.12) {
               s.on = false;
             }
           }
@@ -226,49 +258,30 @@ export function ClothDemo2() {
       }
 
       // ── Constraints ───────────────────────────────────────────────────
-      const iter = phase === 2 ? ITER_INTERACTIVE : ITER;
-      for (let it = 0; it < iter; it++) {
+      for (let it = 0; it < ITER; it++) {
         for (const s of segs) {
           if (!s.on) continue;
           const pa = pts[s.a], pb = pts[s.b];
-          const dx = pa.x - pb.x, dy = pa.y - pb.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+          const ddx = pa.x - pb.x, ddy = pa.y - pb.y;
+          const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 0.001;
           const tear = s.rest * TEAR_MULT;
           s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
           if (dist > tear) { s.on = false; continue; }
           const diff = (dist - s.rest) / dist * 0.5;
-          const ox = dx * diff, oy = dy * diff;
+          const ox = ddx * diff, oy = ddy * diff;
           if (!pa.pinned) { pa.x -= ox; pa.y -= oy; }
           if (!pb.pinned) { pb.x += ox; pb.y += oy; }
         }
       }
 
-      // ── Rebuild trigger + laser physics ──────────────────────────────
+      // ── Rebuild trigger ────────────────────────────────────────────────
       if (phase === 2 && ready && totalSegs > 0) {
-        const brokenCount = segs.reduce((n, s) => n + (s.on ? 0 : 1), 0);
-        if (!rebuilding && brokenCount / totalSegs >= 0.40) {
+        let broken = 0;
+        for (const s of segs) if (!s.on) broken++;
+        if (broken / totalSegs >= 0.40) {
           rebuilding = true;
           rebuildT = 0;
         }
-      }
-      if (rebuilding) {
-        rebuildT = Math.min(1, rebuildT + 0.007);
-        const laserX = rebuildT * W;
-        for (const s of segs) {
-          const midX = (pts[s.a].x + pts[s.b].x) * 0.5;
-          if (!s.on && midX < laserX) {
-            s.on = true;
-            for (const idx of [s.a, s.b]) {
-              const p = pts[idx];
-              if (!p.pinned) {
-                p.x += (p.lx - p.x) * 0.25;
-                p.y += (p.ly - p.y) * 0.25;
-                p.px = p.x; p.py = p.y;
-              }
-            }
-          }
-        }
-        if (rebuildT >= 1) rebuilding = false;
       }
 
       // ── Draw ──────────────────────────────────────────────────────────
@@ -276,7 +289,17 @@ export function ClothDemo2() {
       ctx.fillStyle = "#0b0d14";
       ctx.fillRect(0, 0, W, H);
       ctx.lineCap = "round";
+      renderSegs();
 
+      // Pin nodes
+      for (const p of pts) {
+        if (!p.pinned) continue;
+        ctx.fillStyle = "rgba(58,134,214,0.45)";
+        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function renderSegs() {
       for (const s of segs) {
         if (!s.on) continue;
         const pa = pts[s.a], pb = pts[s.b];
@@ -309,28 +332,19 @@ export function ClothDemo2() {
         ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
         ctx.lineWidth = lw; ctx.stroke();
       }
+    }
 
-      // Pin nodes
-      for (const p of pts) {
-        if (!p.pinned) continue;
-        ctx.fillStyle = "rgba(58,134,214,0.45)";
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
-      }
-
-      // Laser rebuild sweep
-      if (rebuilding) {
-        const laserX = rebuildT * W;
-        const grad = ctx.createLinearGradient(laserX - 40, 0, laserX + 8, 0);
-        grad.addColorStop(0, "rgba(58,134,214,0)");
-        grad.addColorStop(0.65, "rgba(120,200,255,0.30)");
-        grad.addColorStop(1, "rgba(200,240,255,0.80)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(laserX - 40, 0, 48, H);
-        ctx.beginPath();
-        ctx.moveTo(laserX, 0); ctx.lineTo(laserX, H);
-        ctx.strokeStyle = "rgba(200,240,255,0.92)";
-        ctx.lineWidth = 1.5; ctx.stroke();
-      }
+    function renderLaser(laserX: number) {
+      const grad = ctx.createLinearGradient(laserX - 48, 0, laserX + 10, 0);
+      grad.addColorStop(0, "rgba(58,134,214,0)");
+      grad.addColorStop(0.6, "rgba(120,200,255,0.35)");
+      grad.addColorStop(1, "rgba(220,245,255,0.90)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(laserX - 48, 0, 58, H);
+      ctx.beginPath();
+      ctx.moveTo(laserX, 0); ctx.lineTo(laserX, H);
+      ctx.strokeStyle = "rgba(220,245,255,0.95)";
+      ctx.lineWidth = 2; ctx.stroke();
     }
 
     raf.current = requestAnimationFrame(frame);
