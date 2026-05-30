@@ -170,10 +170,12 @@ function SliderRow({ label, value, min, max, step, onChange, unit = "" }: {
       <input
         type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))}
-        className="w-full h-px bg-white/15 appearance-none cursor-pointer accent-white/60
-          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5
-          [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-white/65
-          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
+        className="w-full h-[2px] bg-white/15 appearance-none cursor-pointer accent-white/60
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5
+          [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-white/70
+          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer
+          [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full
+          [&::-moz-range-thumb]:bg-white/70 [&::-moz-range-thumb]:border-0"
       />
     </div>
   );
@@ -297,11 +299,12 @@ export function ClothDemo2() {
       lastMouseT = performance.now();
     }, { passive: false });
     canvas.addEventListener("touchstart", e => {
+      e.preventDefault(); // evita double-tap zoom su iOS
       mou.current.down = true;
       const p = getPos(e.touches[0]);
       mou.current.x = p.x; mou.current.y = p.y;
       lastMouseT = performance.now();
-    });
+    }, { passive: false });
     canvas.addEventListener("touchend", () => { mou.current.down = false; });
 
     let lastTs = 0;
@@ -640,8 +643,8 @@ export function ClothDemo2() {
         <button
           onClick={() => setHudOpen(v => !v)}
           className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/60
-            border border-white/10 hover:border-white/20 px-3 py-1.5 backdrop-blur-sm
-            bg-black/20 transition-colors w-full text-right"
+            border border-white/10 hover:border-white/20 px-4 py-3 backdrop-blur-sm
+            bg-black/20 transition-colors w-full text-right min-h-[44px]"
         >
           {hudOpen ? "× close" : "hud"}
         </button>
