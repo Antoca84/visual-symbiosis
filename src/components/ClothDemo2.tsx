@@ -173,77 +173,56 @@ export function ClothDemo2() {
       if (dissolveTriggered) {
         dissolveT += dt;
 
-        if (dissolveExploding) {
-          // Esplosione continua: push outward per frame
-          for (const p of pts) {
-            if (p.pinned) continue;
-            const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
-            const olen = Math.hypot(odx, ody) + 0.5;
-            p.px -= (odx / olen) * 2.5 + (Math.random() - 0.5) * 1.2;
-            p.py -= (ody / olen) * 2.0 + (Math.random() - 0.5) * 1.2;
-            p.heat = Math.min(1, p.heat + 0.015);
-          }
-        } else {
-          // Pre-wave + slacken
+        // Pre-wave + slacken (solo prima dell'esplosione)
+        if (!dissolveExploding) {
           for (const p of pts) {
             if (p.pinned) continue;
             if (dissolveT < p.dissolveDelay) {
-              // Pre-wave: vibrazione visibile
               const nx = (Math.sin(p.ix * 13.7 + dissolveT * 4.2) - 0.5) * 3.5;
               const ny = (Math.sin(p.iy * 19.3 + dissolveT * 3.8 + 2.1) - 0.5) * 3.5;
               p.x += nx; p.y += ny;
             } else {
-              // Slacken: deriva lenta outward
               const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
               const olen = Math.hypot(odx, ody) + 0.5;
-              p.x += (odx / olen) * 0.28;
-              p.y += (ody / olen) * 0.28;
-              p.heat = Math.min(1, p.heat + 0.004);
+              p.x += (odx / olen) * 0.55;
+              p.y += (ody / olen) * 0.55;
+              p.heat = Math.min(1, p.heat + 0.005);
             }
           }
         }
 
-        // Fisica base senza gravity durante dissolve (nodi volano outward)
+        // Fisica base senza gravity
         for (const p of pts) {
           if (p.pinned) continue;
           const vx = (p.x - p.px) * DAMPING;
           const vy = (p.y - p.py) * DAMPING;
           p.px = p.x; p.py = p.y;
           p.x += vx; p.y += vy;
-          p.heat *= 0.98;
+          p.heat *= 0.985;
         }
 
-        // Misura displacement dal grid iniziale
-        let dissolvedCount = 0, unpinned = 0;
-        for (const p of pts) {
-          if (p.pinned) continue;
-          unpinned++;
-          if (Math.hypot(p.x - p.ix, p.y - p.iy) > 90) dissolvedCount++;
-        }
-        const dissolveRatio = dissolvedCount / (unpinned || 1);
-
-        // 40%: kick esplosione totale (una volta sola)
-        if (!dissolveExploding && dissolveRatio >= 0.40) {
+        // Explosion kick a 2.2s — una volta sola, poi i nodi volano per inerzia
+        if (!dissolveExploding && dissolveT >= 2.2) {
           dissolveExploding = true;
           for (const p of pts) {
             if (p.pinned) continue;
             const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
             const olen = Math.hypot(odx, ody) + 0.5;
-            const str = 3.0 + Math.random() * 2.5;
-            p.px -= (odx / olen) * str + (Math.random() - 0.5) * 1.5;
-            p.py -= (ody / olen) * str + (Math.random() - 0.5) * 1.5;
+            const str = 4.5 + Math.random() * 3.0;
+            p.px -= (odx / olen) * str + (Math.random() - 0.5) * 2.0;
+            p.py -= (ody / olen) * str + (Math.random() - 0.5) * 2.0;
           }
         }
 
-        // 78%: reconstruct — riparte dall'inizio come HeroGridNebula
-        if (dissolveExploding && dissolveRatio >= 0.78) {
+        // Reconstruct a 6s dal trigger
+        if (dissolveExploding && dissolveT >= 6.0) {
           const d = build(W, H);
           pts = d.pts; segs = d.segs;
           assignTargets(pts, letterPixels);
           dissolveTriggered = false;
           dissolveExploding = false;
           dissolveT = 0;
-          t0 = null; // restart animazione completa
+          t0 = null;
         }
 
         render(dissolveTriggered);
@@ -345,8 +324,8 @@ export function ClothDemo2() {
           dissolveOriginY = hc > 0 ? hcy / hc : H * 0.45;
           const maxDist = Math.hypot(W, H);
           for (const p of pts) {
-            // ix/iy = posizione CORRENTE al trigger (non griglia iniziale)
-            p.ix = p.x; p.iy = p.y;
+            p.px = p.x; p.py = p.y;  // azzera velocità Verlet
+            p.ix = p.x; p.iy = p.y;  // snap riferimento displacement
             p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 1.5;
           }
         }
