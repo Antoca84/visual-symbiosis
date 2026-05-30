@@ -116,6 +116,27 @@ export function ClothDemo2() {
     let dissolveOriginX = 0, dissolveOriginY = 0;
     let dissolveT = 0;
 
+    // Ricostruzione animata: onda verso l'alto poi ricaduta
+    const reconstruct = (ts: number) => {
+      const d = build(W, H);
+      pts = d.pts; segs = d.segs;
+      assignTargets(pts, letterPixels);
+      // Velocità iniziale upward per ogni nodo: bottom rows lanciate più in alto
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const p = pts[r * COLS + c];
+          if (p.pinned) continue;
+          const upwardV = 1.5 + (r / (ROWS - 1)) * 10; // 1.5→11.5 px/frame
+          p.py = p.y + upwardV;                          // Verlet: vy = y - py = -upwardV (salita)
+          p.px = p.x + (Math.random() - 0.5) * 1.5;
+        }
+      }
+      dissolveTriggered = false;
+      dissolveExploding = false;
+      dissolveT = 0;
+      t0 = ts; // fase 0: settle da capo (cloth sale poi ricade, poi attract)
+    };
+
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
       const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -216,14 +237,7 @@ export function ClothDemo2() {
 
         // Reconstruct a 6s dal trigger
         if (dissolveExploding && dissolveT >= 6.0) {
-          const d = build(W, H);
-          pts = d.pts; segs = d.segs;
-          assignTargets(pts, letterPixels);
-          dissolveTriggered = false;
-          dissolveExploding = false;
-          dissolveT = 0;
-          // Salta settle, inizia da attract (come HeroGridNebula salta float+letter)
-          t0 = lastTs - T_SETTLE * 1000;
+          reconstruct(lastTs);
         }
 
         render(dissolveTriggered);
@@ -316,10 +330,7 @@ export function ClothDemo2() {
           if (!p.pinned) { unpinned++; if (p.y > H * 1.25) offScreen++; }
         }
         if (unpinned > 0 && offScreen / unpinned >= 0.70) {
-          const d = build(W, H);
-          pts = d.pts; segs = d.segs;
-          assignTargets(pts, letterPixels);
-          t0 = lastTs - T_SETTLE * 1000;
+          reconstruct(lastTs);
         }
       }
 
