@@ -318,16 +318,9 @@ export function ClothDemo2() {
       const phase = el < T_SETTLE ? 0 : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at    = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
-      // Phase 2 start timestamp per constraint ramp
-      if (phase === 2 && phase2StartT < 0) phase2StartT = ts;
-      const phase2Age = phase2StartT >= 0 ? (ts - phase2StartT) / 1000 : 0;
-
-      // Constraints: OFF in fase 0/1, ramp 0→1 su 1.5s a inizio fase 2
-      const constraintRamp = phase < 2 ? 0 : Math.min(1, phase2Age / 1.5);
-
-      // Letter attraction fade: piena in fase 1, si spegne in 1.5s di fase 2
-      // (evita fight con constraints → elimina bounce/squish)
-      const letterAttrFade = phase < 2 ? 1 : Math.max(0, 1 - phase2Age / 1.5);
+      // Constraints: floor 0.25 in fase 0 (evita free-fall), rampa in fase 1, pieno in fase 2
+      const constraintRamp = phase === 0 ? 0.25 : phase === 1 ? 0.25 + at * 0.75 : 1.0;
+      const letterAttrFade = 1.0; // heatMask gestisce fase 2 internamente
 
       // Idle wave
       const idleMs  = phase === 2 && !dissolveTriggered ? Math.max(0, ts - lastMouseT - 2000) : 0;
