@@ -110,6 +110,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     let dissolveTriggered = false;
     let dissolveExploding = false;
     let dissolveStartTs: number | null = null;
+    let dissolveOriginRx = 0, dissolveOriginRy = 0; // centroide hotspot in grid space
     let sustainedHeatFrames = 0;
     let gridEntryTs: number | null = null;
     let idleFrames = 0;
@@ -433,32 +434,36 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
         } else if (phase === "dissolve") {
           if (dissolveExploding) {
-            // Esplosione totale: forza outward forte da posizione corrente
-            const dist = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) + 0.05;
-            n.vx += (n.x / dist) * 0.022;
-            n.vy += (n.y / dist) * 0.022;
-            n.vz += (n.z / dist) * 0.012;
+            // Esplosione totale: outward dal centroide hotspot
+            const odx = n.rx - dissolveOriginRx;
+            const ody = n.ry - dissolveOriginRy;
+            const olen = Math.sqrt(odx * odx + ody * ody) + 0.05;
+            n.vx += (odx / olen) * 0.028;
+            n.vy += (ody / olen) * 0.028;
+            n.vz += (Math.random() - 0.5) * 0.018;
             n.vx *= 0.994; n.vy *= 0.994; n.vz *= 0.994;
             n.x += n.vx; n.y += n.vy; n.z += n.vz;
             n.heat = Math.min(1, n.heat + 0.025);
           } else if (dissolveElapsed < n.dissolveDelay) {
-            // Vibrazione tensione pre-onda
-            n.vx += (_hs(n.rx * 13.7 + t * 5.1) - 0.5) * 0.003;
-            n.vy += (_hs(n.ry * 19.3 + t * 4.7 + 2.1) - 0.5) * 0.003;
-            n.vx *= 0.92; n.vy *= 0.92;
+            // Vibrazione tensione pre-onda (rete che si tende prima di cedere)
+            n.vx += (_hs(n.rx * 13.7 + t * 5.1) - 0.5) * 0.004;
+            n.vy += (_hs(n.ry * 19.3 + t * 4.7 + 2.1) - 0.5) * 0.004;
+            n.vx *= 0.90; n.vy *= 0.90;
             n.x += n.vx; n.y += n.vy;
           } else {
-            // Nodo raggiunto dall'onda: scatta outward
-            const dist = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) + 0.05;
-            const outF = 0.014 * (1 + (n.burnCount >= 2 ? 1.5 : 0));
-            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.010;
-            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.010;
-            n.vx += (n.x / dist) * outF + nx;
-            n.vy += (n.y / dist) * outF + ny;
-            n.vz += (n.z / dist) * outF * 0.3;
-            n.vx *= 0.990; n.vy *= 0.990; n.vz *= 0.990;
+            // Onda arrivata: nodo scatta outward DAL CENTROIDE HOTSPOT
+            const odx = n.rx - dissolveOriginRx;
+            const ody = n.ry - dissolveOriginRy;
+            const olen = Math.sqrt(odx * odx + ody * ody) + 0.05;
+            const outF = 0.016 * (1 + (n.burnCount >= 1 ? 1.2 : 0));
+            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.008;
+            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.008;
+            n.vx += (odx / olen) * outF + nx;
+            n.vy += (ody / olen) * outF + ny;
+            n.vz += (_hs(n.rx * 7.1 + t * 2.3) - 0.5) * 0.018;
+            n.vx *= 0.989; n.vy *= 0.989; n.vz *= 0.989;
             n.x += n.vx; n.y += n.vy; n.z += n.vz;
-            n.heat = Math.min(1, n.heat + 0.015);
+            n.heat = Math.min(1, n.heat + 0.018);
           }
         }
       }
@@ -490,43 +495,41 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
       // ── Burn tracking + dissolve trigger ─────────────────────────────────────
       if (rawPhase === "grid" && !dissolveTriggered) {
-        let hotNodeCount = 0;
         for (let i = 0; i < N_NODES; i++) {
           const n = nodes[i];
-          if (n.heat > 0.85) {
+          if (n.heat > 0.55) {
             if (!n.wasHot) { n.burnCount++; n.wasHot = true; }
-            hotNodeCount++;
-          } else if (n.heat < 0.30) {
+          } else if (n.heat < 0.20) {
             n.wasHot = false;
           }
         }
-        if (hotNodeCount > 2) sustainedHeatFrames++;
-        else sustainedHeatFrames = Math.max(0, sustainedHeatFrames - 2);
 
         let maxBurn = 0;
         for (let i = 0; i < N_NODES; i++) maxBurn = Math.max(maxBurn, nodes[i].burnCount);
 
-        if (maxBurn >= 2) {
+        if (maxBurn >= 1) {
           dissolveTriggered = true;
           dissolveStartTs = ts;
-          // Hotspot = centroide nodi caldi → origine propagazione
+          // Centroide dei nodi caldi = origine del laceramento
           let hcx = 0, hcy = 0, hc = 0;
           for (const n of nodes) {
-            if (n.heat > 0.35) { hcx += n.rx; hcy += n.ry; hc++; }
+            if (n.heat > 0.25) { hcx += n.rx; hcy += n.ry; hc++; }
           }
           if (hc > 0) { hcx /= hc; hcy /= hc; }
+          dissolveOriginRx = hcx;
+          dissolveOriginRy = hcy;
           const maxSpan = Math.sqrt(SPAN_X * SPAN_X + SPAN_Y * SPAN_Y) * 2;
           for (const n of nodes) {
             const dist = Math.hypot(n.rx - hcx, n.ry - hcy);
-            // Onda più veloce: 0.8s max invece di 1.4s
-            n.dissolveDelay = (dist / maxSpan) * 0.8;
-            // Solo nodi caldi ricevono kick immediato — gli altri aspettano la loro onda
-            if (n.heat > 0.35) {
-              const angle = Math.atan2(n.ry - hcy, n.rx - hcx) + (Math.random() - 0.5) * 0.9;
-              const str = 0.07 + n.heat * 0.20;
-              n.vx += Math.cos(angle) * str;
-              n.vy += Math.sin(angle) * str * 0.7 + 0.05;
-              n.vz += (Math.random() - 0.5) * str * 0.5;
+            n.dissolveDelay = (dist / maxSpan) * 0.9;
+            // Kick immediato solo ai nodi caldi, direzione outward dal centroide
+            if (n.heat > 0.25) {
+              const dx = n.rx - hcx, dy = n.ry - hcy;
+              const dlen = Math.sqrt(dx * dx + dy * dy) + 0.01;
+              const str = 0.06 + n.heat * 0.18;
+              n.vx += (dx / dlen) * str + (Math.random() - 0.5) * 0.03;
+              n.vy += (dy / dlen) * str * 0.8 + (Math.random() - 0.5) * 0.03;
+              n.vz += (Math.random() - 0.5) * str * 0.6;
             }
             n.locked = false;
           }
