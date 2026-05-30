@@ -436,18 +436,18 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             n.vx *= 0.92; n.vy *= 0.92;
             n.x += n.vx; n.y += n.vy;
           } else {
-            const ddx = n.x - n.rx, ddy = n.y - n.ry;
-            const dist = Math.sqrt(ddx * ddx + ddy * ddy + n.z * n.z) + 0.01;
-            const outF = 0.007 * (1 + (n.burnCount >= 3 ? 2.0 : 0));
-            // Cheap hash noise instead of fbm2 (saves ~12 octave calls per node)
-            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.015;
-            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.015;
-            n.vx += (ddx / dist) * outF + nx;
-            n.vy += (ddy / dist) * outF + ny;
-            n.vz += (n.z / dist) * outF * 0.4;
-            n.vx *= 0.989; n.vy *= 0.989; n.vz *= 0.989;
+            // Direzione outward dal centro griglia (0,0) — evita divisione per zero
+            const cx = n.x, cy = n.y;
+            const dist = Math.sqrt(cx * cx + cy * cy + n.z * n.z) + 0.05;
+            const outF = 0.008 * (1 + (n.burnCount >= 2 ? 1.8 : 0));
+            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.012;
+            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.012;
+            n.vx += (cx / dist) * outF + nx;
+            n.vy += (cy / dist) * outF + ny;
+            n.vz += (n.z / dist) * outF * 0.3;
+            n.vx *= 0.991; n.vy *= 0.991; n.vz *= 0.991;
             n.x += n.vx; n.y += n.vy; n.z += n.vz;
-            n.heat *= 0.982;
+            n.heat *= 0.984;
           }
         }
       }
@@ -495,28 +495,27 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         let maxBurn = 0;
         for (let i = 0; i < N_NODES; i++) maxBurn = Math.max(maxBurn, nodes[i].burnCount);
 
-        if (maxBurn >= 3 || sustainedHeatFrames >= 180) {
+        if (maxBurn >= 2 || sustainedHeatFrames >= 90) {
           dissolveTriggered = true;
           dissolveStartTs = ts;
           // Hotspot = centroid of hot nodes → propagation origin
           let hcx = 0, hcy = 0, hc = 0;
           for (const n of nodes) {
-            if (n.heat > 0.45) { hcx += n.rx; hcy += n.ry; hc++; }
+            if (n.heat > 0.35) { hcx += n.rx; hcy += n.ry; hc++; }
           }
           if (hc > 0) { hcx /= hc; hcy /= hc; }
           const maxSpan = Math.sqrt(SPAN_X * SPAN_X + SPAN_Y * SPAN_Y) * 2;
           for (const n of nodes) {
             const dist = Math.hypot(n.rx - hcx, n.ry - hcy);
-            // Delay: far nodes start dissolving later — max 1.4s
             n.dissolveDelay = (dist / maxSpan) * 1.4;
-            // Small immediate kick only for hot nodes; others rely on physics build-up
-            if (n.heat > 0.45) {
-              const angle = Math.random() * Math.PI * 2;
-              const str = 0.04 + n.heat * 0.18;
-              n.vx += Math.cos(angle) * str;
-              n.vy += Math.sin(angle) * str * 0.6 + 0.06;
-              n.vz += (Math.random() - 0.5) * str * 0.5;
-            }
+            // Kick direzionale outward dal centroide per tutti i nodi
+            const angle = Math.atan2(n.ry - hcy, n.rx - hcx) + (Math.random() - 0.5) * 1.2;
+            const str = n.heat > 0.35
+              ? 0.06 + n.heat * 0.22                           // nodi caldi: forte
+              : 0.012 + (1 - Math.min(1, dist / maxSpan)) * 0.018; // lontani: leggero
+            n.vx += Math.cos(angle) * str;
+            n.vy += Math.sin(angle) * str * 0.7 + (n.heat > 0.35 ? 0.06 : 0.01);
+            n.vz += (Math.random() - 0.5) * str * 0.5;
             n.locked = false;
           }
         }
