@@ -199,22 +199,32 @@ export function ClothDemo2() {
         p.px = p.x; p.py = p.y;
         p.x += vx; p.y += vy + GRAVITY;
 
-        // Attrazione lettera / extra-gravity fuori lettera
-        // Extra-gravity solo in fase 1 (formazione) — in fase 2 si ferma
-        if (ready && at > 0.04) {
-          const t = Math.max(0, at - 0.04) / 0.96;
-          const isLetter = p.ld < 18;
-          if (isLetter) {
+        if (phase === 2) {
+          // Fase interattiva: cancella gravity per tutti → cloth fluttua stabile
+          p.y -= GRAVITY;
+          // Nodi lettera: attraction mantiene la forma (si azzera sotto mouse)
+          if (ready && p.ld < 40) {
             const heatMask = Math.max(0, 1 - p.heat * 4);
-            const str = Math.min(0.32, t * t * 0.38) * heatMask;
+            const str = 0.22 * heatMask;
+            const ddx = p.lx - p.x, ddy = p.ly - p.y;
+            p.x += ddx * str;
+            p.y += ddy * str;
+            p.px += ddx * str * 0.4;
+            p.py += ddy * str * 0.4;
+          }
+        } else if (ready && at > 0.04) {
+          // Fase formazione lettera
+          const t = Math.max(0, at - 0.04) / 0.96;
+          const isLetter = p.ld < 40;
+          if (isLetter) {
+            const str = Math.min(0.32, t * t * 0.38);
             const ddx = p.lx - p.x, ddy = p.ly - p.y;
             p.x += ddx * str;
             p.y += ddy * str;
             p.y -= GRAVITY * Math.min(1, t * 2);
             p.px += ddx * str * 0.5;
             p.py += ddy * str * 0.5;
-          } else if (phase === 1) {
-            // Extra gravity solo durante fase di formazione
+          } else {
             const extraG = Math.min(0.7, t * t * p.ld * 0.0045);
             p.y += extraG;
           }
@@ -275,12 +285,13 @@ export function ClothDemo2() {
       }
 
       // ── Rebuild trigger ────────────────────────────────────────────────
-      if (phase === 2 && ready && totalSegs > 0) {
+      if (phase === 2 && ready && totalSegs > 0 && !rebuilding) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / totalSegs >= 0.40) {
+        if (broken / totalSegs >= 0.35) {
           rebuilding = true;
           rebuildT = 0;
+          console.log("[cloth] rebuild triggered", broken, "/", totalSegs);
         }
       }
 
@@ -296,6 +307,14 @@ export function ClothDemo2() {
         if (!p.pinned) continue;
         ctx.fillStyle = "rgba(58,134,214,0.45)";
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Debug HUD
+      if (phase === 2) {
+        let broken = 0; for (const s of segs) if (!s.on) broken++;
+        ctx.fillStyle = "rgba(255,255,255,0.55)";
+        ctx.font = "11px monospace";
+        ctx.fillText(`ph:${phase} rdy:${ready} torn:${(broken/totalSegs*100).toFixed(0)}% segs:${totalSegs}`, 10, H - 12);
       }
     }
 
