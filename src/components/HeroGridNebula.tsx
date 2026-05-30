@@ -10,7 +10,7 @@ function vnoise2(x: number, y: number): number {
   const lr=(a:number,b:number,t:number)=>a+t*(b-a);
   return lr(lr(h(ix,iy),h(ix+1,iy),ux),lr(h(ix,iy+1),h(ix+1,iy+1),ux),uy);
 }
-function fbm2(x: number, y: number, o = 4): number {
+function fbm2(x: number, y: number, o = 3): number {
   let v=0,a=0.5,f=1;
   for(let i=0;i<o;i++){v+=a*vnoise2(x*f,y*f);a*=0.5;f*=2;}
   return v;
@@ -108,6 +108,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
     // Dissolve state (closure vars, reset on restart)
     let dissolveTriggered = false;
+    let dissolveExploding = false;
     let dissolveStartTs: number | null = null;
     let sustainedHeatFrames = 0;
     let gridEntryTs: number | null = null;
@@ -356,10 +357,13 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           const S = 0.48;
           const fnx = (fbm2(n.x * S + t * 0.26, n.y * S + 1.73) - 0.5) * 2;
           const fny = (fbm2(n.x * S + 7.31, n.y * S + t * 0.26 + 2.11) - 0.5) * 2;
-          const fnz = (fbm2(n.z * 0.4 + t * 0.18, n.x * 0.3 + 4.0) - 0.5) * 2;
           n.vx += fnx * 0.0017;
           n.vy += fny * 0.0017;
-          n.vz += fnz * 0.001;
+          // z-noise solo per tier 1/2 (risparmia ~24% fbm2 calls in float)
+          if (n.tier > 0) {
+            const fnz = (fbm2(n.z * 0.4 + t * 0.18, n.x * 0.3 + 4.0) - 0.5) * 2;
+            n.vz += fnz * 0.001;
+          }
           const d = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
           if (d > 0.9) { const g = (d - 0.9) * 0.00038; n.vx -= n.x * g; n.vy -= n.y * g; n.vz -= n.z * g; }
           n.vx *= 0.967; n.vy *= 0.967; n.vz *= 0.967;
@@ -428,22 +432,29 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.heat *= 0.964;
 
         } else if (phase === "dissolve") {
-          // Gate: node not yet reached by propagation wave
-          if (dissolveElapsed < n.dissolveDelay) {
-            // Subtle tension vibration while waiting
+          if (dissolveExploding) {
+            // Esplosione totale: forza outward forte da posizione corrente
+            const dist = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) + 0.05;
+            n.vx += (n.x / dist) * 0.022;
+            n.vy += (n.y / dist) * 0.022;
+            n.vz += (n.z / dist) * 0.012;
+            n.vx *= 0.994; n.vy *= 0.994; n.vz *= 0.994;
+            n.x += n.vx; n.y += n.vy; n.z += n.vz;
+            n.heat = Math.min(1, n.heat + 0.025);
+          } else if (dissolveElapsed < n.dissolveDelay) {
+            // Vibrazione tensione pre-onda
             n.vx += (_hs(n.rx * 13.7 + t * 5.1) - 0.5) * 0.003;
             n.vy += (_hs(n.ry * 19.3 + t * 4.7 + 2.1) - 0.5) * 0.003;
             n.vx *= 0.92; n.vy *= 0.92;
             n.x += n.vx; n.y += n.vy;
           } else {
-            // Direzione outward dal centro griglia (0,0) — evita divisione per zero
-            const cx = n.x, cy = n.y;
-            const dist = Math.sqrt(cx * cx + cy * cy + n.z * n.z) + 0.05;
+            // Dissoluzione locale: outward dal centro
+            const dist = Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) + 0.05;
             const outF = 0.008 * (1 + (n.burnCount >= 2 ? 1.8 : 0));
             const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.012;
             const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.012;
-            n.vx += (cx / dist) * outF + nx;
-            n.vy += (cy / dist) * outF + ny;
+            n.vx += (n.x / dist) * outF + nx;
+            n.vy += (n.y / dist) * outF + ny;
             n.vz += (n.z / dist) * outF * 0.3;
             n.vx *= 0.991; n.vy *= 0.991; n.vz *= 0.991;
             n.x += n.vx; n.y += n.vy; n.z += n.vz;
@@ -521,14 +532,32 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
-      // ── Dissolve → reset to converge when 60% scattered ──────────────────────
+      // ── Dissolve → esplosione totale al 40% → ricostruzione al 78% ──────────
       if (phase === "dissolve") {
         let dissolvedCount = 0;
         for (const n of nodes) {
           if (Math.hypot(n.x - n.rx, n.y - n.ry) > 1.8) dissolvedCount++;
         }
-        if (dissolvedCount / N_NODES >= 0.4) {
+        const dissolveRatio = dissolvedCount / N_NODES;
+
+        // 40%: scatta esplosione totale, kick a tutti i nodi ancora vicini alla griglia
+        if (!dissolveExploding && dissolveRatio >= 0.4) {
+          dissolveExploding = true;
+          for (const n of nodes) {
+            if (Math.hypot(n.x - n.rx, n.y - n.ry) < 1.2) {
+              const angle = Math.atan2(n.y, n.x) + (Math.random() - 0.5) * 0.9;
+              const str = 0.07 + Math.random() * 0.10;
+              n.vx += Math.cos(angle) * str;
+              n.vy += Math.sin(angle) * str;
+              n.vz += (Math.random() - 0.5) * str * 0.7;
+            }
+          }
+        }
+
+        // 78%: ricostruisce dalla fase converge
+        if (dissolveExploding && dissolveRatio >= 0.78) {
           dissolveTriggered = false;
+          dissolveExploding = false;
           dissolveStartTs = null;
           sustainedHeatFrames = 0;
           for (const n of nodes) {
@@ -545,7 +574,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             n.dx = 0; n.dy = 0; n.dz = 0;
             n.burnCount = 0; n.wasHot = false; n.dissolveDelay = 0;
           }
-          startRef.current = ts - (P1 + P_LETTER + 0.05) * 1000; // jump to converge start
+          startRef.current = ts - (P1 + P_LETTER + 0.05) * 1000;
         }
       }
 
