@@ -23,34 +23,36 @@ const T_CLOUD = 1.4;   // durata nube float
 const T_LETTER = 2.6;  // durata convergenza lettere
 
 // ── Particle cloud (sistema indipendente) ─────────────────────────────────────
-const N_PART = 900;
+const N_PART = 2000;
 interface Part {
   x: number; y: number;
   vx: number; vy: number;
   lx: number; ly: number;
-  ld: number;   // dist dalla lettera più vicina (spazio schermo)
-  delay: number; // stagger 0–0.35
+  ld: number;
+  delay: number; // stagger 0–0.40
 }
 
 function initParticles(W: number, H: number): Part[] {
   return Array.from({ length: N_PART }, () => ({
-    x:  W * 0.5 + (Math.random() - 0.5) * W * 0.88,
-    y:  H * 0.42 + (Math.random() - 0.5) * H * 0.58,
-    vx: 0, vy: 0,
+    x:  Math.random() * W,
+    y:  Math.random() * H,
+    vx: (Math.random() - 0.5) * 0.8,
+    vy: (Math.random() - 0.5) * 0.8,
     lx: 0, ly: 0, ld: Infinity,
-    delay: Math.random() * 0.35,
+    delay: Math.random() * 0.40,
   }));
 }
 
 function assignPartTargets(parts: Part[], lp: { x: number; y: number }[]) {
   if (!lp.length) return;
-  for (const p of parts) {
-    let minD = Infinity, nx = p.x, ny = p.y;
-    for (const q of lp) {
-      const d = Math.hypot(p.x - q.x, p.y - q.y);
-      if (d < minD) { minD = d; nx = q.x; ny = q.y; }
-    }
-    p.lx = nx; p.ly = ny; p.ld = minD;
+  // Distribuzione uniforme: ogni particella → pixel-lettera unico (con tiny jitter)
+  const shuffled = [...lp].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < parts.length; i++) {
+    const q = shuffled[i % shuffled.length];
+    const p = parts[i];
+    p.lx = q.x + (Math.random() - 0.5) * 2.5;
+    p.ly = q.y + (Math.random() - 0.5) * 2.5;
+    p.ld = Math.hypot(p.x - p.lx, p.y - p.ly);
   }
 }
 
@@ -129,7 +131,7 @@ async function sampleLetters(
   ox.fillText("Magic",      padLeft, baseY2);
   const d = ox.getImageData(0, 0, W, H).data;
   const out: { x: number; y: number }[] = [];
-  const step = 5;
+  const step = 4;
   for (let y = 0; y < H; y += step)
     for (let x = 0; x < W; x += step)
       if (d[(y*W+x)*4+3] > 100) out.push({ x, y });
@@ -362,19 +364,27 @@ export function ClothDemo2() {
             if (dN > 0.44) { const g=(dN-0.44)*5; p.vx-=bdx/W*g; p.vy-=bdy/H*g; }
             p.vx *= 0.967; p.vy *= 0.967;
           } else {
-            // Lettera: convergenza staggered per-particella
-            const converge = p.ld < H * 0.55; // solo particelle vicino alla zona testo
-            const localT   = Math.max(0, (at - p.delay) / Math.max(0.01, 1 - p.delay));
-            if (converge && localT > 0) {
-              p.vx += (p.lx - p.x) * localT * localT * 0.18;
-              p.vy += (p.ly - p.y) * localT * localT * 0.18;
+            // Lettera: convergenza staggered — tutte le particelle verso target
+            const localT = Math.max(0, (at - p.delay) / Math.max(0.01, 1 - p.delay));
+            if (localT > 0) {
+              const dx = p.lx - p.x, dy = p.ly - p.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist < 1.5 && localT > 0.5) {
+                // Snap finale
+                p.x = p.lx; p.y = p.ly; p.vx = 0; p.vy = 0;
+              } else {
+                const t2 = localT * localT;
+                p.vx += dx * t2 * 0.26;
+                p.vy += dy * t2 * 0.26;
+                p.vx *= 0.84; p.vy *= 0.84;
+              }
             } else {
-              // Ancora in float o non-lettera
+              // Prima dello stagger: ancora in float
               const fnx = (fbm2(nx*S + tAnim*0.22, ny*S + 1.73) - 0.5) * 2;
               const fny = (fbm2(nx*S + 7.31, ny*S + tAnim*0.22 + 2.11) - 0.5) * 2;
               p.vx += fnx * 0.22; p.vy += fny * 0.15;
+              p.vx *= 0.88; p.vy *= 0.88;
             }
-            p.vx *= 0.88; p.vy *= 0.88;
           }
           p.x += p.vx; p.y += p.vy;
         }
@@ -482,9 +492,8 @@ export function ClothDemo2() {
         const partFade = ph===0 ? 1 : Math.max(0, 1 - at * 1.2);
         if (partFade > 0.01) {
           for (const p of parts) {
-            const converged = ph===1 && p.ld < H*0.55;
-            const localT    = converged ? Math.max(0,(at-p.delay)/Math.max(0.01,1-p.delay)) : 0;
-            const glow      = localT > 0.3 ? Math.min(1,(localT-0.3)/0.4) : 0;
+            const localT = ph===1 ? Math.max(0,(at-p.delay)/Math.max(0.01,1-p.delay)) : 0;
+            const glow   = localT > 0.25 ? Math.min(1,(localT-0.25)/0.45) : 0;
             const a  = partFade * (0.30 + glow * 0.52) * brightness;
             const r  = 1.0 + glow * 1.4;
             const rc = Math.round(80  + glow * 130);
