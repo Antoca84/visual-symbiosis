@@ -199,6 +199,7 @@ export function ClothDemo2() {
     const canvas = cvs.current!;
     const ctx    = canvas.getContext("2d")!;
     let W = 0, H = 0;
+    let mouseR = MOUSE_R; // adattivo: 50% su mobile
     let pts: Pt[] = [], segs: Seg[] = [];
     let t0: number | null = null;
     let ready = false;
@@ -266,6 +267,7 @@ export function ClothDemo2() {
 
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
+      mouseR = W < 768 ? MOUSE_R * 0.5 : MOUSE_R;
       const dpr = Math.min(devicePixelRatio || 1, 2);
       canvas.width = W * dpr; canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -394,8 +396,8 @@ export function ClothDemo2() {
         // Mouse
         const ddx = p.x - mx, ddy = p.y - my;
         const md2 = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (md2 < MOUSE_R) {
-          const prox = 1 - md2 / MOUSE_R;
+        if (md2 < mouseR) {
+          const prox = 1 - md2 / mouseR;
           if (down) {
             p.x += (mx - p.x) * prox * 0.75;
             p.y += (my - p.y) * prox * 0.75;
@@ -606,7 +608,7 @@ export function ClothDemo2() {
       // Cursore
       const { x: cmx, y: cmy } = mou.current;
       if (!inDissolve && ph === 2 && cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
-        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI*2);
+        ctx.beginPath(); ctx.arc(cmx, cmy, mouseR, 0, Math.PI*2);
         ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1; ctx.stroke();
         ctx.beginPath(); ctx.arc(cmx, cmy, 2.5, 0, Math.PI*2);
         ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
