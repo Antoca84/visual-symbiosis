@@ -31,9 +31,9 @@ interface Pt {
   px: number; py: number;
   pinned: boolean;
   lx: number; ly: number; ld: number;
-  ix: number; iy: number;       // posizione iniziale grid (per misurare displacement)
+  ix: number; iy: number;
   heat: number;
-  dissolveDelay: number;        // delay per-nodo prima dello slacken
+  dissolveDelay: number;
 }
 
 interface Seg {
@@ -43,7 +43,9 @@ interface Seg {
   ten: number;
 }
 
-function build(W: number, H: number) {
+// scatter=true: nodi partono in posizioni random (nube particelle)
+// rest distances sempre calcolate dalla griglia
+function build(W: number, H: number, scatter = false) {
   const sx = W / (COLS - 1);
   const sy = (H * 0.65) / (ROWS - 1);
   const oy = H * 0.05;
@@ -51,16 +53,17 @@ function build(W: number, H: number) {
   const pts: Pt[] = [];
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++) {
-      const x = c * sx, y = oy + r * sy;
+      const gx = c * sx, gy = oy + r * sy;
       pts.push({
-        x, y, px: x, py: y,
+        x: gx, y: gy, px: gx, py: gy,
         pinned: r === 0 && c % 3 === 0,
-        lx: x, ly: y, ld: Infinity,
-        ix: x, iy: y,
+        lx: gx, ly: gy, ld: Infinity,
+        ix: gx, iy: gy,
         heat: 0, dissolveDelay: 0,
       });
     }
 
+  // Segs calcolati dalla griglia (rest distances corrette)
   const segs: Seg[] = [];
   const add = (a: number, b: number) => {
     const d = Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y);
@@ -72,6 +75,17 @@ function build(W: number, H: number) {
       if (c < COLS - 1) add(i, i + 1);
       if (r < ROWS - 1) add(i, i + COLS);
     }
+
+  // Scatter posizioni dopo aver calcolato rest distances
+  if (scatter) {
+    for (const p of pts) {
+      if (p.pinned) continue;
+      p.x  = W * 0.5 + (Math.random() - 0.5) * W * 0.92;
+      p.y  = H * 0.42 + (Math.random() - 0.5) * H * 0.65;
+      p.px = p.x; p.py = p.y;
+      p.ix = p.x; p.iy = p.y;
+    }
+  }
 
   return { pts, segs };
 }
@@ -124,9 +138,9 @@ export function ClothDemo2() {
     let t0: number | null = null;
     let ready = false;
     let letterPixels: { x: number; y: number }[] = [];
-    let tAnim = 0; // tempo animazione per water
+    let tAnim = 0;
 
-    // Water offscreen (identico HeroGridNebula)
+    // Water offscreen
     const WW = 240, WH = 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
@@ -160,25 +174,31 @@ export function ClothDemo2() {
       ctx.imageSmoothingEnabled = false;
     }
 
-    // Dissolve state (come HeroGridNebula)
+    // Dissolve state
     let dissolveTriggered = false;
     let dissolveExploding = false;
     let dissolveOriginX = 0, dissolveOriginY = 0;
     let dissolveT = 0;
-    let gridEntryT = -1; // timestamp entrata phase 2 per rampa clearAlpha
+    let gridEntryT = -1;
 
-    // Ricostruzione animata: onda verso l'alto poi ricaduta
+    // Idle wave: traccia ultima interazione mouse
+    let lastMouseT = -99999;
+
+    // Closure vars accessibili in render()
+    let currentPhase = 0;
+    let currentAt = 0;
+    let currentWaveAmp = 0;
+
     const reconstruct = (ts: number) => {
-      const d = build(W, H);
+      const d = build(W, H); // no scatter: upward wave animation
       pts = d.pts; segs = d.segs;
       assignTargets(pts, letterPixels);
-      // Velocità iniziale upward per ogni nodo: bottom rows lanciate più in alto
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
           const p = pts[r * COLS + c];
           if (p.pinned) continue;
-          const upwardV = 1.5 + (r / (ROWS - 1)) * 10; // 1.5→11.5 px/frame
-          p.py = p.y + upwardV;                          // Verlet: vy = y - py = -upwardV (salita)
+          const upwardV = 1.5 + (r / (ROWS - 1)) * 10;
+          p.py = p.y + upwardV;
           p.px = p.x + (Math.random() - 0.5) * 1.5;
         }
       }
@@ -186,7 +206,7 @@ export function ClothDemo2() {
       dissolveExploding = false;
       dissolveT = 0;
       gridEntryT = -1;
-      t0 = ts; // fase 0: settle da capo (cloth sale poi ricade, poi attract)
+      t0 = ts;
     };
 
     const resize = () => {
@@ -194,11 +214,13 @@ export function ClothDemo2() {
       const dpr = Math.min(devicePixelRatio || 1, 2);
       canvas.width = W * dpr; canvas.height = H * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const d = build(W, H); pts = d.pts; segs = d.segs;
+      const d = build(W, H, true); // scatter=true: nube particelle all'avvio
+      pts = d.pts; segs = d.segs;
       ready = false; t0 = null; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false; dissolveT = 0; gridEntryT = -1;
       sampleLetters(W, H).then(lp => {
         letterPixels = lp;
+        // assignTargets usa le posizioni GRIGLIA (lx/ly già settate in build), ok
         assignTargets(pts, lp);
         ready = true;
       });
@@ -210,7 +232,10 @@ export function ClothDemo2() {
       const r = canvas.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
-    const mm = (e: MouseEvent) => Object.assign(mou.current, pos(e));
+    const mm = (e: MouseEvent) => {
+      Object.assign(mou.current, pos(e));
+      lastMouseT = performance.now();
+    };
     const md = (e: MouseEvent) => { mou.current.down = true; mm(e); };
     const mu = () => { mou.current.down = false; };
     window.addEventListener("mousemove", mm);
@@ -220,11 +245,13 @@ export function ClothDemo2() {
       e.preventDefault();
       const p = pos(e.touches[0]);
       mou.current.x = p.x; mou.current.y = p.y;
+      lastMouseT = performance.now();
     }, { passive: false });
     canvas.addEventListener("touchstart", (e) => {
       mou.current.down = true;
       const p = pos(e.touches[0]);
       mou.current.x = p.x; mou.current.y = p.y;
+      lastMouseT = performance.now();
     });
     canvas.addEventListener("touchend", () => { mou.current.down = false; });
 
@@ -243,11 +270,22 @@ export function ClothDemo2() {
         : el < T_SETTLE + T_ATTRACT ? 1 : 2;
       const at = phase > 0 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) : 0;
 
-      // ── Dissolve physics (stile HeroGridNebula) ───────────────────────
+      // Constraint ramp: fase 0 = no constraints (particelle libere)
+      // fase 1 = rampa 0→1 (cloth si forma) · fase 2 = pieno
+      const constraintRamp = phase === 0 ? 0 : phase === 1 ? Math.min(1, at * 3.5) : 1;
+
+      // Idle wave: sale dopo 2s di inattività, solo in fase 2
+      const idleMs = phase === 2 && !dissolveTriggered ? Math.max(0, ts - lastMouseT - 2000) : 0;
+      const waveAmp = Math.min(1, idleMs / 2000);
+
+      currentPhase = phase;
+      currentAt = at;
+      currentWaveAmp = waveAmp;
+
+      // ── Dissolve physics ──────────────────────────────────────────────
       if (dissolveTriggered) {
         dissolveT += dt;
 
-        // Pre-wave + slacken (solo prima dell'esplosione)
         if (!dissolveExploding) {
           for (const p of pts) {
             if (p.pinned) continue;
@@ -265,7 +303,6 @@ export function ClothDemo2() {
           }
         }
 
-        // Fisica base senza gravity
         for (const p of pts) {
           if (p.pinned) continue;
           const vx = (p.x - p.px) * DAMPING;
@@ -275,7 +312,6 @@ export function ClothDemo2() {
           p.heat *= 0.985;
         }
 
-        // Explosion kick a 2.2s — una volta sola, poi i nodi volano per inerzia
         if (!dissolveExploding && dissolveT >= 2.2) {
           dissolveExploding = true;
           for (const p of pts) {
@@ -288,7 +324,6 @@ export function ClothDemo2() {
           }
         }
 
-        // Reconstruct a 6s dal trigger
         if (dissolveExploding && dissolveT >= 6.0) {
           reconstruct(lastTs);
         }
@@ -305,7 +340,7 @@ export function ClothDemo2() {
         p.px = p.x; p.py = p.y;
         p.x += vx; p.y += vy + GRAVITY;
 
-        // Attrazione lettera
+        // Attrazione lettera (fase 1+)
         if (ready && at > 0.04) {
           const t = Math.max(0, at - 0.04) / 0.96;
           const isLetter = p.ld < 28;
@@ -343,7 +378,7 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Pre-constraint tear ────────────────────────────────────────────
+      // ── Tear (solo fase 2) ────────────────────────────────────────────
       if (phase === 2) {
         for (const s of segs) {
           if (!s.on) continue;
@@ -359,24 +394,26 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Constraints ───────────────────────────────────────────────────
-      for (let it = 0; it < ITER; it++) {
-        for (const s of segs) {
-          if (!s.on) continue;
-          const pa = pts[s.a], pb = pts[s.b];
-          const ddx = pa.x - pb.x, ddy = pa.y - pb.y;
-          const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 0.001;
-          const tear = s.rest * TEAR_MULT;
-          s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
-          if (dist > tear) { s.on = false; continue; }
-          const diff = (dist - s.rest) / dist * 0.5;
-          const ox = ddx * diff, oy = ddy * diff;
-          if (!pa.pinned) { pa.x -= ox; pa.y -= oy; }
-          if (!pb.pinned) { pb.x += ox; pb.y += oy; }
+      // ── Constraints (con ramp per fase 0/1) ──────────────────────────
+      if (constraintRamp > 0) {
+        for (let it = 0; it < ITER; it++) {
+          for (const s of segs) {
+            if (!s.on) continue;
+            const pa = pts[s.a], pb = pts[s.b];
+            const ddx = pa.x - pb.x, ddy = pa.y - pb.y;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 0.001;
+            const tear = s.rest * TEAR_MULT;
+            s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
+            if (dist > tear && phase === 2) { s.on = false; continue; }
+            const diff = (dist - s.rest) / dist * 0.5 * constraintRamp;
+            const ox = ddx * diff, oy = ddy * diff;
+            if (!pa.pinned) { pa.x -= ox; pa.y -= oy; }
+            if (!pb.pinned) { pb.x += ox; pb.y += oy; }
+          }
         }
       }
 
-      // ── Fell off screen → reconstruct diretto ────────────────────────
+      // ── Off-screen → reconstruct ──────────────────────────────────────
       if (phase === 2 && ready && !dissolveTriggered) {
         let offScreen = 0, unpinned = 0;
         for (const p of pts) {
@@ -394,7 +431,6 @@ export function ClothDemo2() {
         if (broken / segs.length >= 0.45) {
           dissolveTriggered = true;
           dissolveT = 0;
-          // Centroide nodi caldi
           let hcx = 0, hcy = 0, hc = 0;
           for (const p of pts) {
             if (!p.pinned && p.heat > 0.2) { hcx += p.x; hcy += p.y; hc++; }
@@ -403,14 +439,13 @@ export function ClothDemo2() {
           dissolveOriginY = hc > 0 ? hcy / hc : H * 0.45;
           const maxDist = Math.hypot(W, H);
           for (const p of pts) {
-            p.px = p.x; p.py = p.y;  // azzera velocità Verlet
-            p.ix = p.x; p.iy = p.y;  // snap riferimento displacement
+            p.px = p.x; p.py = p.y;
+            p.ix = p.x; p.iy = p.y;
             p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 1.5;
           }
         }
       }
 
-      // clearAlpha per fase — floor alto per evitare accumulo gradient/vignette
       if (phase === 2 && gridEntryT < 0 && !dissolveTriggered) gridEntryT = ts;
       if (dissolveTriggered || phase < 2) gridEntryT = -1;
       const gridAge = gridEntryT >= 0 ? (ts - gridEntryT) / 1000 : 0;
@@ -418,7 +453,6 @@ export function ClothDemo2() {
         : phase === 1 ? 0.72
         : 0.72 + 0.23 * Math.min(1, gridAge / 1.5);
 
-      // water alpha: 0 in settle, sale in attract, pieno in interactive
       const waterAlpha = phase === 0 ? 0
         : phase === 1 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) * 0.18
         : 0.18;
@@ -427,64 +461,144 @@ export function ClothDemo2() {
     }
 
     function render(clearAlpha: number, inDissolve: boolean, waterAlpha: number) {
+      const ph  = inDissolve ? 2 : currentPhase;
+      const at  = inDissolve ? 1 : currentAt;
+      const waveAmp = inDissolve ? 0 : currentWaveAmp;
+
       ctx.fillStyle = `rgba(11,13,20,${clearAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
       drawWater(waterAlpha);
       ctx.lineCap = "round";
 
-      for (const s of segs) {
-        if (!s.on) continue;
-        const pa = pts[s.a], pb = pts[s.b];
-        const h = Math.max(s.ten, (pa.heat + pb.heat) * 0.5);
+      // ── Visibilità linee / punti per fase ─────────────────────────────
+      // fase 0: punti soli (nube particelle libere)
+      // fase 1: punti che si spengono mentre appaiono le linee
+      // fase 2: solo linee
+      const lineVis = ph === 0 ? 0 : ph === 1 ? Math.min(1, at * 1.8) : 1;
+      const dotVis  = ph === 0 ? 1 : ph === 1 ? Math.max(0, 1 - at * 2.2) : 0;
 
-        // dissolveLineFade: segmento sfuma man mano che i nodi si allontanano (come HeroGridNebula)
-        let dissolveFade = 1;
-        if (inDissolve) {
-          const fadeA = Math.max(0, 1 - Math.hypot(pa.x - pa.ix, pa.y - pa.iy) / 180);
-          const fadeB = Math.max(0, 1 - Math.hypot(pb.x - pb.ix, pb.y - pb.iy) / 180);
-          dissolveFade = fadeA * fadeB;
-          if (dissolveFade < 0.02) continue;
+      // ── Dot render (nube particelle) ──────────────────────────────────
+      if (dotVis > 0.01) {
+        for (const p of pts) {
+          if (p.pinned) continue;
+          // Intensità basata su vicinanza al target lettera
+          const nearLetter = p.ld < 28 && at > 0.05 ? Math.min(1, (at - 0.05) / 0.4) : 0;
+          const dotA = dotVis * (0.35 + nearLetter * 0.55);
+          const dotR = 1.2 + nearLetter * 1.4;
+          // Colore base: blu brillante; nodi-lettera: bianco-azzurro
+          const rc = Math.round(80 + nearLetter * 140);
+          const gc = Math.round(170 + nearLetter * 75);
+          const bc = 255;
+          ctx.beginPath(); ctx.arc(p.x, p.y, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${rc},${gc},${bc},${dotA.toFixed(3)})`;
+          ctx.fill();
+          // Glow dot
+          if (dotA > 0.25) {
+            ctx.beginPath(); ctx.arc(p.x, p.y, dotR * 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(80,170,255,${(dotA * 0.08).toFixed(3)})`;
+            ctx.fill();
+          }
         }
-
-        let r: number, g: number, b: number;
-        if (h > 0.72) {
-          const f = (h - 0.72) / 0.28;
-          r = 255; g = Math.round(210 + (255 - 210) * f); b = Math.round(255 * f);
-        } else if (h > 0.38) {
-          const f = (h - 0.38) / 0.34;
-          r = 230; g = Math.round(40 + (210 - 40) * f); b = 0;
-        } else if (h > 0.12) {
-          const f = (h - 0.12) / 0.26;
-          r = Math.round(58 + (230 - 58) * f);
-          g = Math.round(134 * (1 - f));
-          b = Math.round(214 * (1 - f));
-        } else {
-          r = 58; g = 134; b = 214;
-        }
-
-        const alpha = (0.28 + h * 0.68) * dissolveFade;
-        const lw    = 0.45 + h * 2.1;
-
-        if (h > 0.45) {
-          ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
-          ctx.strokeStyle = `rgba(${r},${g},${b},${(alpha * 0.18).toFixed(3)})`;
-          ctx.lineWidth = lw * 5; ctx.stroke();
-        }
-        ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
-        ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-        ctx.lineWidth = lw; ctx.stroke();
       }
 
-      if (!inDissolve) {
+      // ── Segment render ────────────────────────────────────────────────
+      if (lineVis > 0.01) {
+        // Glow pre-pass 1 (alone blu ampia, batch)
+        ctx.beginPath();
+        for (const s of segs) {
+          if (!s.on) continue;
+          if (inDissolve) {
+            const pa = pts[s.a], pb = pts[s.b];
+            const fadeA = Math.max(0, 1 - Math.hypot(pa.x - pa.ix, pa.y - pa.iy) / 180);
+            const fadeB = Math.max(0, 1 - Math.hypot(pb.x - pb.ix, pb.y - pb.iy) / 180);
+            if (fadeA * fadeB < 0.02) continue;
+          }
+          ctx.moveTo(pts[s.a].x, pts[s.a].y);
+          ctx.lineTo(pts[s.b].x, pts[s.b].y);
+        }
+        ctx.strokeStyle = `rgba(60,150,255,${(0.055 * lineVis).toFixed(3)})`;
+        ctx.lineWidth = 9;
+        ctx.stroke();
+
+        // Glow pre-pass 2 (alone interna)
+        ctx.beginPath();
+        for (const s of segs) {
+          if (!s.on) continue;
+          ctx.moveTo(pts[s.a].x, pts[s.a].y);
+          ctx.lineTo(pts[s.b].x, pts[s.b].y);
+        }
+        ctx.strokeStyle = `rgba(90,180,255,${(0.12 * lineVis).toFixed(3)})`;
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+
+        // Per-segment: colore + onda idle
+        for (const s of segs) {
+          if (!s.on) continue;
+          const pa = pts[s.a], pb = pts[s.b];
+          const h = Math.max(s.ten, (pa.heat + pb.heat) * 0.5);
+
+          let dissolveFade = 1;
+          if (inDissolve) {
+            const fadeA = Math.max(0, 1 - Math.hypot(pa.x - pa.ix, pa.y - pa.iy) / 180);
+            const fadeB = Math.max(0, 1 - Math.hypot(pb.x - pb.ix, pb.y - pb.iy) / 180);
+            dissolveFade = fadeA * fadeB;
+            if (dissolveFade < 0.02) continue;
+          }
+
+          // Onda idle: illumina la rete da sx → dx quando mouse inattivo
+          let effectiveH = h;
+          if (waveAmp > 0.01) {
+            const midX = (pa.x + pb.x) * 0.5;
+            const waveRaw = Math.sin((midX / W) * Math.PI * 5.0 - tAnim * 2.2);
+            const waveV = Math.max(0, waveRaw) * waveAmp * 0.55;
+            effectiveH = Math.min(1, h + waveV);
+          }
+
+          let r: number, g: number, b: number;
+          if (effectiveH > 0.72) {
+            const f = (effectiveH - 0.72) / 0.28;
+            r = 255; g = Math.round(210 + (255 - 210) * f); b = Math.round(255 * f);
+          } else if (effectiveH > 0.38) {
+            const f = (effectiveH - 0.38) / 0.34;
+            r = 230; g = Math.round(40 + (210 - 40) * f); b = 0;
+          } else if (effectiveH > 0.12) {
+            const f = (effectiveH - 0.12) / 0.26;
+            r = Math.round(90 + (230 - 90) * f);
+            g = Math.round(185 * (1 - f));
+            b = Math.round(255 * (1 - f));
+          } else {
+            // Base: blu brillante (forte contrasto su sfondo scuro)
+            r = 90; g = 185; b = 255;
+          }
+
+          // Alpha più alta per contrasto base
+          const alpha = (0.62 + effectiveH * 0.34) * dissolveFade * lineVis;
+          const lw    = 0.5 + effectiveH * 1.9;
+
+          // Bloom per heat alta
+          if (effectiveH > 0.45) {
+            ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+            ctx.strokeStyle = `rgba(${r},${g},${b},${(alpha * 0.16 * dissolveFade).toFixed(3)})`;
+            ctx.lineWidth = lw * 4.5; ctx.stroke();
+          }
+          ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y);
+          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+          ctx.lineWidth = lw; ctx.stroke();
+        }
+      }
+
+      // Pin dots
+      if (!inDissolve && ph === 2) {
         for (const p of pts) {
           if (!p.pinned) continue;
-          ctx.fillStyle = "rgba(58,134,214,0.45)";
+          ctx.fillStyle = "rgba(90,185,255,0.55)";
           ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
         }
       }
 
+      // Cursore
       const { x: cmx, y: cmy } = mou.current;
-      if (!inDissolve && cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
+      if (!inDissolve && ph === 2 && cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
         ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.lineWidth = 1; ctx.stroke();
@@ -492,13 +606,13 @@ export function ClothDemo2() {
         ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
       }
 
-      // Gradiente inferiore (identico HeroGridNebula)
+      // Gradiente inferiore
       const gd = ctx.createLinearGradient(0, H * 0.65, 0, H);
       gd.addColorStop(0, "rgba(0,0,0,0)");
       gd.addColorStop(1, "rgba(11,13,20,1)");
       ctx.fillStyle = gd; ctx.fillRect(0, 0, W, H);
 
-      // Vignette radiale (identico HeroGridNebula)
+      // Vignette
       const vig = ctx.createRadialGradient(W * 0.5, H * 0.5, W * 0.18, W * 0.5, H * 0.5, W * 0.82);
       vig.addColorStop(0, "rgba(0,0,0,0)");
       vig.addColorStop(1, "rgba(11,13,20,0.72)");
