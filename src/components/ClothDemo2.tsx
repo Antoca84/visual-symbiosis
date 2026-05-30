@@ -635,8 +635,8 @@ export function ClothDemo2() {
         style={{ touchAction: "none" }}
       />
 
-      {/* HUD */}
-      <div className="absolute top-4 right-4 z-30 pointer-events-auto select-none font-mono">
+      {/* HUD — fixed per uscire dallo stacking context del canvas */}
+      <div className="fixed top-4 right-4 z-[100] pointer-events-auto select-none font-mono">
         <button
           onClick={() => setHudOpen(v => !v)}
           className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/60
