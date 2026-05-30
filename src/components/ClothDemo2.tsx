@@ -262,9 +262,10 @@ export function ClothDemo2() {
             p.x += (mx - p.x) * prox * 0.75;
             p.y += (my - p.y) * prox * 0.75;
           } else {
+            // Hover: movimento gentile
             const inv = 1 / (md2 || 0.001);
-            p.x += ddx * inv * prox * 2.0;
-            p.y += ddy * inv * prox * 2.0;
+            p.x += ddx * inv * prox * 0.7;
+            p.y += ddy * inv * prox * 0.7;
           }
           p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
@@ -382,12 +383,39 @@ export function ClothDemo2() {
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
       }
 
-      // Debug HUD
-      if (phase === 2) {
-        let broken = 0; for (const s of segs) if (!s.on) broken++;
-        ctx.fillStyle = "rgba(255,255,255,0.45)";
-        ctx.font = "11px monospace";
-        ctx.fillText(`ph:${phase} rdy:${ready} torn:${(broken/totalSegs*100).toFixed(0)}% rebuild:${rebuilding}`, 10, H - 12);
+      // Reticolo termico (mirino)
+      const { x: cmx, y: cmy } = mou.current;
+      if (cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
+        // Glow esterno — rosso
+        const grad = ctx.createRadialGradient(cmx, cmy, MOUSE_R * 0.4, cmx, cmy, MOUSE_R);
+        grad.addColorStop(0, "rgba(220,50,30,0.18)");
+        grad.addColorStop(1, "rgba(220,50,30,0)");
+        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
+        ctx.fillStyle = grad; ctx.fill();
+
+        // Anello rosso esterno
+        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(220,50,30,0.45)";
+        ctx.lineWidth = 1; ctx.stroke();
+
+        // Anello giallo medio
+        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R * 0.35, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255,210,50,0.65)";
+        ctx.lineWidth = 1; ctx.stroke();
+
+        // Centro bianco
+        ctx.beginPath(); ctx.arc(cmx, cmy, 3, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fill();
+
+        // Mirino — 4 segmenti con gap al centro
+        const arm = 14, gap = 5;
+        ctx.beginPath();
+        ctx.moveTo(cmx - arm, cmy); ctx.lineTo(cmx - gap, cmy);
+        ctx.moveTo(cmx + gap, cmy); ctx.lineTo(cmx + arm, cmy);
+        ctx.moveTo(cmx, cmy - arm); ctx.lineTo(cmx, cmy - gap);
+        ctx.moveTo(cmx, cmy + gap); ctx.lineTo(cmx, cmy + arm);
+        ctx.strokeStyle = "rgba(255,255,255,0.75)";
+        ctx.lineWidth = 1; ctx.stroke();
       }
     }
 
@@ -402,7 +430,7 @@ export function ClothDemo2() {
   return (
     <canvas
       ref={cvs}
-      className="absolute inset-0 w-full h-full block cursor-crosshair"
+      className="absolute inset-0 w-full h-full block cursor-none"
       style={{ touchAction: "none" }}
     />
   );
