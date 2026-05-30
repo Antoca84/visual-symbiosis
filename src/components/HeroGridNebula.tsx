@@ -50,6 +50,7 @@ interface Node {
   tier: 0 | 1 | 2;
   burnCount: number;
   wasHot: boolean;
+  dissolveDelay: number;
 }
 
 function makeNodes(): Node[] {
@@ -77,6 +78,7 @@ function makeNodes(): Node[] {
       tier: roll < 0.76 ? 0 : roll < 0.93 ? 1 : 2,
       burnCount: 0,
       wasHot: false,
+      dissolveDelay: 0,
     };
   });
 }
@@ -426,16 +428,27 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
           n.heat *= 0.964;
 
         } else if (phase === "dissolve") {
-          // Nodes fly outward from their grid rest position
-          const ddx = n.x - n.rx, ddy = n.y - n.ry;
-          const dist = Math.sqrt(ddx * ddx + ddy * ddy + n.z * n.z) + 0.01;
-          const outF = 0.006 * (1 + (n.burnCount >= 3 ? 2.2 : 0));
-          n.vx += (ddx / dist) * outF + (fbm2(n.x * 0.4 + t * 0.3, n.y * 0.4 + 1.1) - 0.5) * 0.018;
-          n.vy += (ddy / dist) * outF + (fbm2(n.y * 0.4 + 2.1, n.z * 0.4 + t * 0.25) - 0.5) * 0.018;
-          n.vz += (n.z / dist) * outF * 0.5 + (fbm2(n.z * 0.3 + t * 0.2, n.x * 0.3 + 4.1) - 0.5) * 0.012;
-          n.vx *= 0.988; n.vy *= 0.988; n.vz *= 0.988;
-          n.x += n.vx; n.y += n.vy; n.z += n.vz;
-          n.heat *= 0.982;
+          // Gate: node not yet reached by propagation wave
+          if (dissolveElapsed < n.dissolveDelay) {
+            // Subtle tension vibration while waiting
+            n.vx += (_hs(n.rx * 13.7 + t * 5.1) - 0.5) * 0.003;
+            n.vy += (_hs(n.ry * 19.3 + t * 4.7 + 2.1) - 0.5) * 0.003;
+            n.vx *= 0.92; n.vy *= 0.92;
+            n.x += n.vx; n.y += n.vy;
+          } else {
+            const ddx = n.x - n.rx, ddy = n.y - n.ry;
+            const dist = Math.sqrt(ddx * ddx + ddy * ddy + n.z * n.z) + 0.01;
+            const outF = 0.007 * (1 + (n.burnCount >= 3 ? 2.0 : 0));
+            // Cheap hash noise instead of fbm2 (saves ~12 octave calls per node)
+            const nx = (_hs(n.rx * 17.3 + t * 3.7) - 0.5) * 0.015;
+            const ny = (_hs(n.ry * 31.1 + t * 4.3 + 7.1) - 0.5) * 0.015;
+            n.vx += (ddx / dist) * outF + nx;
+            n.vy += (ddy / dist) * outF + ny;
+            n.vz += (n.z / dist) * outF * 0.4;
+            n.vx *= 0.989; n.vy *= 0.989; n.vz *= 0.989;
+            n.x += n.vx; n.y += n.vy; n.z += n.vz;
+            n.heat *= 0.982;
+          }
         }
       }
 
@@ -485,12 +498,25 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         if (maxBurn >= 3 || sustainedHeatFrames >= 180) {
           dissolveTriggered = true;
           dissolveStartTs = ts;
+          // Hotspot = centroid of hot nodes → propagation origin
+          let hcx = 0, hcy = 0, hc = 0;
           for (const n of nodes) {
-            const strength = 0.06 + (n.burnCount >= 3 ? 0.38 : 0);
-            const angle = Math.random() * Math.PI * 2;
-            n.vx += Math.cos(angle) * strength;
-            n.vy += (0.08 + Math.random() * 0.14) * strength * 3.5;
-            n.vz += (Math.random() - 0.5) * strength;
+            if (n.heat > 0.45) { hcx += n.rx; hcy += n.ry; hc++; }
+          }
+          if (hc > 0) { hcx /= hc; hcy /= hc; }
+          const maxSpan = Math.sqrt(SPAN_X * SPAN_X + SPAN_Y * SPAN_Y) * 2;
+          for (const n of nodes) {
+            const dist = Math.hypot(n.rx - hcx, n.ry - hcy);
+            // Delay: far nodes start dissolving later — max 1.4s
+            n.dissolveDelay = (dist / maxSpan) * 1.4;
+            // Small immediate kick only for hot nodes; others rely on physics build-up
+            if (n.heat > 0.45) {
+              const angle = Math.random() * Math.PI * 2;
+              const str = 0.04 + n.heat * 0.18;
+              n.vx += Math.cos(angle) * str;
+              n.vy += Math.sin(angle) * str * 0.6 + 0.06;
+              n.vz += (Math.random() - 0.5) * str * 0.5;
+            }
             n.locked = false;
           }
         }
@@ -502,7 +528,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         for (const n of nodes) {
           if (Math.hypot(n.x - n.rx, n.y - n.ry) > 1.8) dissolvedCount++;
         }
-        if (dissolvedCount / N_NODES >= 0.6) {
+        if (dissolvedCount / N_NODES >= 0.4) {
           dissolveTriggered = false;
           dissolveStartTs = null;
           sustainedHeatFrames = 0;
@@ -518,7 +544,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             n.vz = (Math.random() - 0.5) * 0.03;
             n.locked = false; n.heat = 0;
             n.dx = 0; n.dy = 0; n.dz = 0;
-            n.burnCount = 0; n.wasHot = false;
+            n.burnCount = 0; n.wasHot = false; n.dissolveDelay = 0;
           }
           startRef.current = ts - (P1 + P_LETTER + 0.05) * 1000; // jump to converge start
         }
