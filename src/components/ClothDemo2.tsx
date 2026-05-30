@@ -213,7 +213,7 @@ export function ClothDemo2() {
           // Snap finale: letter nodes sulla target, azzera velocità
           for (const p of pts) {
             if (p.pinned) continue;
-            if (p.ld < 40) { p.x = p.lx; p.y = p.ly; }
+            if (p.ld < 28) { p.x = p.lx; p.y = p.ly; }
             p.px = p.x; p.py = p.y;
           }
         }
@@ -235,7 +235,7 @@ export function ClothDemo2() {
         // Attrazione lettera
         if (ready && at > 0.04) {
           const t = Math.max(0, at - 0.04) / 0.96;
-          const isLetter = p.ld < 40;
+          const isLetter = p.ld < 28;
           if (isLetter) {
             const heatMask = phase === 2 ? Math.max(0, 1 - p.heat * 4) : 1;
             const str = Math.min(0.38, t * t * 0.42) * heatMask;
@@ -244,8 +244,8 @@ export function ClothDemo2() {
             p.y += ddy * str;
             // Controgravità proporzionale all'attraction — nodi lettera tengono posizione
             p.y -= GRAVITY * Math.min(1, str / 0.20) * heatMask;
-            p.px += ddx * str * 0.45;
-            p.py += ddy * str * 0.45;
+            p.px += ddx * str * 0.58;
+            p.py += ddy * str * 0.58;
           } else if (phase === 1) {
             // Fase formazione: piccola extra gravity per separare non-lettera
             const extraG = Math.min(0.10, t * t * 0.12);
