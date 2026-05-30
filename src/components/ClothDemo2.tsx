@@ -106,6 +106,7 @@ export function ClothDemo2() {
     let rebuilding = false;
     let rebuildT = 0;
     let totalSegs = 0;
+    let phase2Init = false;
 
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
@@ -114,7 +115,7 @@ export function ClothDemo2() {
       ctx.scale(dpr, dpr);
       const d = build(W, H); pts = d.pts; segs = d.segs;
       totalSegs = segs.length;
-      ready = false; t0 = null; rebuilding = false; rebuildT = 0;
+      ready = false; t0 = null; rebuilding = false; rebuildT = 0; phase2Init = false;
       sampleLetters(W, H).then(lp => { assignTargets(pts, lp); ready = true; });
     };
     resize();
@@ -200,6 +201,15 @@ export function ClothDemo2() {
         p.x += vx; p.y += vy + GRAVITY;
 
         if (phase === 2) {
+          // Snap una-tantum: porta letter nodes a target, azzera velocità di tutti
+          if (!phase2Init && ready) {
+            phase2Init = true;
+            for (const q of pts) {
+              if (q.pinned) continue;
+              if (q.ld < 40) { q.x = q.lx; q.y = q.ly; }
+              q.px = q.x; q.py = q.y; // azzera velocità Verlet
+            }
+          }
           // Fase interattiva: cancella gravity per tutti → cloth fluttua stabile
           p.y -= GRAVITY;
           // Nodi lettera: attraction mantiene la forma (si azzera sotto mouse)
@@ -225,7 +235,8 @@ export function ClothDemo2() {
             p.px += ddx * str * 0.5;
             p.py += ddy * str * 0.5;
           } else {
-            const extraG = Math.min(0.7, t * t * p.ld * 0.0045);
+            // Extra gravity limitata — non trascina via i nodi lettera via constraints
+            const extraG = Math.min(0.12, t * t * 0.15);
             p.y += extraG;
           }
         }
