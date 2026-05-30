@@ -222,7 +222,8 @@ export function ClothDemo2() {
           dissolveTriggered = false;
           dissolveExploding = false;
           dissolveT = 0;
-          t0 = null;
+          // Salta settle, inizia da attract (come HeroGridNebula salta float+letter)
+          t0 = lastTs - T_SETTLE * 1000;
         }
 
         render(dissolveTriggered);
@@ -312,8 +313,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        const phase2Elapsed = el - (T_SETTLE + T_ATTRACT);
-        if (broken / segs.length >= 0.08 || phase2Elapsed > 12) {
+        if (broken / segs.length >= 0.08) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
@@ -332,26 +332,12 @@ export function ClothDemo2() {
         }
       }
 
-      // DEBUG HUD
-      {
-        let broken = 0;
-        for (const s of segs) if (!s.on) broken++;
-        const phase2Elapsed = el - (T_SETTLE + T_ATTRACT);
-        ctx.fillStyle = "rgba(11,13,20,0.7)";
-        ctx.fillRect(8, 8, 280, 50);
-        ctx.fillStyle = "#0f0";
-        ctx.font = "11px monospace";
-        ctx.fillText(`ph:${phase} torn:${(broken/segs.length*100).toFixed(1)}% p2t:${phase2Elapsed.toFixed(1)}s dT:${dissolveT.toFixed(2)} dX:${dissolveTriggered}`, 14, 28);
-        ctx.fillText(`segs:${segs.length} rdy:${ready} exp:${dissolveExploding}`, 14, 46);
-      }
-
       render(false);
     }
 
     function render(inDissolve: boolean) {
-      // Trail lungo durante dissolve, clear completo altrimenti
       if (inDissolve) {
-        ctx.fillStyle = "rgba(11,13,20,0.06)";
+        ctx.fillStyle = "rgba(11,13,20,0.055)";
       } else {
         ctx.fillStyle = "#0b0d14";
       }
@@ -363,7 +349,15 @@ export function ClothDemo2() {
         const pa = pts[s.a], pb = pts[s.b];
         const h = Math.max(s.ten, (pa.heat + pb.heat) * 0.5);
 
-        // Calore: blu → rosso → giallo → bianco (dal bordo verso il centro)
+        // dissolveLineFade: segmento sfuma man mano che i nodi si allontanano (come HeroGridNebula)
+        let dissolveFade = 1;
+        if (inDissolve) {
+          const fadeA = Math.max(0, 1 - Math.hypot(pa.x - pa.ix, pa.y - pa.iy) / 180);
+          const fadeB = Math.max(0, 1 - Math.hypot(pb.x - pb.ix, pb.y - pb.iy) / 180);
+          dissolveFade = fadeA * fadeB;
+          if (dissolveFade < 0.02) continue;
+        }
+
         let r: number, g: number, b: number;
         if (h > 0.72) {
           const f = (h - 0.72) / 0.28;
@@ -380,7 +374,7 @@ export function ClothDemo2() {
           r = 58; g = 134; b = 214;
         }
 
-        const alpha = 0.28 + h * 0.68;
+        const alpha = (0.28 + h * 0.68) * dissolveFade;
         const lw    = 0.45 + h * 2.1;
 
         if (h > 0.45) {
@@ -393,16 +387,16 @@ export function ClothDemo2() {
         ctx.lineWidth = lw; ctx.stroke();
       }
 
-      // Pin nodes
-      for (const p of pts) {
-        if (!p.pinned) continue;
-        ctx.fillStyle = "rgba(58,134,214,0.45)";
-        ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      if (!inDissolve) {
+        for (const p of pts) {
+          if (!p.pinned) continue;
+          ctx.fillStyle = "rgba(58,134,214,0.45)";
+          ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
       }
 
-      // Cursore: cerchio influenza + punto centrale
       const { x: cmx, y: cmy } = mou.current;
-      if (cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
+      if (!inDissolve && cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
         ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.lineWidth = 1; ctx.stroke();
