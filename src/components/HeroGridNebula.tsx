@@ -622,26 +622,33 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             b = Math.round(COLD_BLUE[2] + (BONE[2] - COLD_BLUE[2]) * f);
           }
 
-          // Dissolve: burned nodes glow arterial red/orange
-          if (phase === "dissolve" && n.burnCount >= 3) {
-            const heatNorm = Math.max(0, n.heat);
-            r = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * heatNorm * 0.6);
-            g = Math.round(ARTERIAL[1] * (1 - heatNorm * 0.5));
-            b = Math.round(ARTERIAL[2] * (1 - heatNorm * 0.7));
+          // Dissolve: nodi caldi → rosso arterioso
+          if (phase === "dissolve" && n.heat > 0.3) {
+            const heatNorm = Math.min(1, n.heat);
+            r = Math.round(r + (ARTERIAL[0] - r) * heatNorm * 0.8);
+            g = Math.round(g * (1 - heatNorm * 0.6));
+            b = Math.round(b * (1 - heatNorm * 0.7));
           }
 
-          // Nodes near their letter target glow slightly brighter
           let brightBoost = 1;
           if (phase === "letter" && n.letterTarget) {
             const dist = Math.hypot(n.x - n.letterTarget.wx, n.y - n.letterTarget.wy);
             brightBoost = dist < 0.25 ? 1.0 + (1 - dist / 0.25) * 1.4 : 1;
           }
-          if (phase === "dissolve") brightBoost = 1.0 + n.heat * 1.2;
+
+          // Dissolve fade: nodi si dissolvono man mano che si allontanano dalla griglia
+          let dissolveFade = 1;
+          if (phase === "dissolve" && dissolveElapsed >= n.dissolveDelay) {
+            const disp = Math.hypot(n.x - n.rx, n.y - n.ry);
+            dissolveFade = Math.max(0, 1 - disp / 3.2);
+            brightBoost = 1.0 + n.heat * 0.8;
+          }
 
           const [baseSize, baseAlpha] = n.tier === 2 ? [0.014, 0.92] : n.tier === 1 ? [0.007, 0.58] : [0.003, 0.32];
-          const sz = Math.max(0.2, s * baseSize * (phase === "letter" ? 1.1 : phase === "dissolve" ? 1.3 : 1));
-          const alpha = Math.min(1, baseAlpha * depthT * brightBoost);
-          if (alpha < 0.02) continue;
+          const szMult = phase === "letter" ? 1.1 : phase === "dissolve" ? Math.max(0.2, dissolveFade) * 1.2 : 1;
+          const sz = Math.max(0.2, s * baseSize * szMult);
+          const alpha = Math.min(1, baseAlpha * depthT * brightBoost * dissolveFade);
+          if (alpha < 0.015) continue;
 
           ctx.fillStyle = `rgba(${r},${g},${b},${(alpha * 0.12).toFixed(4)})`;
           ctx.beginPath(); ctx.arc(sx, sy, sz * 3, 0, Math.PI * 2); ctx.fill();
@@ -650,9 +657,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
-      // --- Grid lines (locked nodes during converge, all during grid/early dissolve) ---
-      const dissolveLineFade = phase === "dissolve" ? Math.max(0, 1 - dissolveElapsed / 0.8) : 1;
-      if (phase === "converge" || phase === "grid" || (phase === "dissolve" && dissolveLineFade > 0)) {
+      // --- Grid lines ---
+      if (phase === "converge" || phase === "grid" || phase === "dissolve") {
         ctx.lineCap = "round"; ctx.lineJoin = "round";
 
         const drawSeg = (i: number, j: number) => {
@@ -663,6 +669,12 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
 
           const avgDz   = (ni.dz + nj.dz) * 0.5;
           const avgHeat = (ni.heat + nj.heat) * 0.5;
+          // Linee scompaiono proporzionalmente al displacement dei nodi (non a timer)
+          const dissolveLineFade = phase === "dissolve"
+            ? Math.max(0, 1 - Math.hypot(ni.x - ni.rx, ni.y - ni.ry) / 2.2) *
+              Math.max(0, 1 - Math.hypot(nj.x - nj.rx, nj.y - nj.ry) / 2.2)
+            : 1;
+          if (dissolveLineFade < 0.01) return;
           let r: number, g: number, bl: number;
           if (avgHeat > 0.01) {
             if (avgHeat > 0.65) {
