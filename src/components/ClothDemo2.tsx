@@ -6,7 +6,7 @@ const GRAVITY = 0.22;
 const DAMPING = 0.985;
 const ITER = 6;
 const MOUSE_R = 90;
-const TEAR_MULT = 1.3;
+const TEAR_MULT = 1.5;
 
 const T_SETTLE  = 1.2;
 const T_ATTRACT = 2.8;
