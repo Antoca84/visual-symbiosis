@@ -108,16 +108,36 @@ async function sampleLetters(
   await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const h1El = document.querySelector("h1");
   if (!h1El || !W || !H) return [];
+
   const cs         = getComputedStyle(h1El);
   const fontFamily = cs.fontFamily || "serif";
   const fontStyle  = cs.fontStyle  || "normal";
   const ls         = parseFloat(cs.letterSpacing) || 0;
   const fontSize   = parseFloat(cs.fontSize) || 80;
   const cvRect     = canvas.getBoundingClientRect();
-  const h1Rect     = h1El.getBoundingClientRect();
-  const padLeft    = h1Rect.left - cvRect.left;
-  const baseY1     = h1Rect.top  - cvRect.top + fontSize * 0.78;
-  const baseY2     = baseY1 + fontSize * 0.85;
+
+  // Usa Range API per bounding rect precisa di ogni riga di testo
+  const textNodes = Array.from(h1El.childNodes)
+    .filter(n => n.nodeType === Node.TEXT_NODE && (n.textContent?.trim() ?? '') !== '');
+  let padLeft = 0, drawY1 = 0, drawY2 = 0;
+  if (textNodes.length >= 2) {
+    const range = document.createRange();
+    range.selectNodeContents(textNodes[0]);
+    const r1 = range.getBoundingClientRect();
+    range.selectNodeContents(textNodes[1]);
+    const r2 = range.getBoundingClientRect();
+    padLeft = r1.left - cvRect.left;
+    // Range.top = top of ink bounding box → usato con actualBoundingBoxAscent sotto
+    drawY1  = r1.top - cvRect.top;
+    drawY2  = r2.top - cvRect.top;
+  } else {
+    // Fallback se Range non trova i nodi
+    const h1Rect = h1El.getBoundingClientRect();
+    padLeft = h1Rect.left - cvRect.left;
+    drawY1  = h1Rect.top  - cvRect.top;
+    drawY2  = drawY1 + fontSize * 0.85;
+  }
+
   const oc = document.createElement("canvas");
   oc.width = W; oc.height = H;
   const ox = oc.getContext("2d")!;
@@ -126,22 +146,27 @@ async function sampleLetters(
   ox.textAlign = "left"; ox.textBaseline = "alphabetic";
   if ("letterSpacing" in ox)
     (ox as unknown as Record<string,string>).letterSpacing =
-      `${(isNaN(ls) ? fontSize*0.04 : ls).toFixed(1)}px`;
-  ox.fillText("Industrial", padLeft, baseY1);
-  ox.fillText("Magic",      padLeft, baseY2);
+      `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
+
+  // actualBoundingBoxAscent = distanza baseline→top ink: sommare a rangeRect.top dà la baseline esatta
+  const m1 = ox.measureText("Industrial");
+  const m2 = ox.measureText("Magic");
+  ox.fillText("Industrial", padLeft, drawY1 + m1.actualBoundingBoxAscent);
+  ox.fillText("Magic",      padLeft, drawY2 + m2.actualBoundingBoxAscent);
+
   const d = ox.getImageData(0, 0, W, H).data;
   const out: { x: number; y: number }[] = [];
   const step = 4;
   for (let y = 0; y < H; y += step)
     for (let x = 0; x < W; x += step)
-      if (d[(y*W+x)*4+3] > 100) out.push({ x, y });
+      if (d[(y * W + x) * 4 + 3] > 100) out.push({ x, y });
   return out;
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
-const HUD_KEY = "lab2-hud-v3";
+const HUD_KEY = "lab2-hud-v4";
 interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; particleGlow: number; trailAlpha: number; }
-const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 0.7, trailAlpha: 0.28 };
+const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 1.0, trailAlpha: 0.6 };
 function loadHud(): HudVals {
   try { const s = localStorage.getItem(HUD_KEY); return s ? { ...HUD_DEF, ...JSON.parse(s) } : HUD_DEF; }
   catch { return HUD_DEF; }
@@ -501,26 +526,26 @@ export function ClothDemo2() {
             // Scia: linea dal frame precedente
             const trailDx = p.x - p.ox, trailDy = p.y - p.oy;
             const trailLen = Math.hypot(trailDx, trailDy);
-            if (trailLen > 0.5 && trailAlpha > 0.01) {
-              const ta = baseA * trailAlpha * 0.7;
+            if (trailLen > 0.2 && trailAlpha > 0.01) {
+              const ta = Math.min(0.95, baseA * trailAlpha);
               ctx.beginPath(); ctx.moveTo(p.ox, p.oy); ctx.lineTo(p.x, p.y);
-              ctx.strokeStyle = `rgba(200,220,255,${ta.toFixed(3)})`;
-              ctx.lineWidth   = 0.7 + converge * 0.5;
+              ctx.strokeStyle = `rgba(210,228,255,${ta.toFixed(3)})`;
+              ctx.lineWidth   = 1.2 + converge * 2.0;
               ctx.stroke();
             }
 
-            // Glow halo bianco (anello esterno)
-            if (particleGlow > 0.01 && baseA > 0.08) {
-              const glowR = (2.0 + converge * 2.5) * particleGlow;
-              const glowA = baseA * particleGlow * (0.10 + converge * 0.12);
+            // Glow halo bianco (anello esterno) — visibile anche in fase float
+            if (particleGlow > 0.01) {
+              const glowR = 3.5 + converge * 5.5;
+              const glowA = Math.min(0.9, baseA * 0.55 * particleGlow);
               ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, Math.PI*2);
-              ctx.fillStyle = `rgba(200,225,255,${glowA.toFixed(3)})`; ctx.fill();
+              ctx.fillStyle = `rgba(210,228,255,${glowA.toFixed(3)})`; ctx.fill();
             }
 
             // Dot core: bianco-blu
-            const coreR = 0.9 + converge * 1.2;
-            const rC    = Math.round(180 + converge * 75);
-            const gC    = Math.round(210 + converge * 45);
+            const coreR = 1.0 + converge * 1.4;
+            const rC    = Math.round(185 + converge * 70);
+            const gC    = Math.round(212 + converge * 43);
             ctx.beginPath(); ctx.arc(p.x, p.y, coreR, 0, Math.PI*2);
             ctx.fillStyle = `rgba(${rC},${gC},255,${baseA.toFixed(3)})`; ctx.fill();
           }
@@ -647,8 +672,8 @@ export function ClothDemo2() {
             <SliderRow label="Angle"      value={hud.waveAngle}     min={0}   max={360} step={1}    onChange={v=>updateHud("waveAngle",v)} unit="°" />
             <div className="my-4 border-t border-white/10" />
             <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Particles</p>
-            <SliderRow label="Glow"       value={hud.particleGlow}  min={0}   max={1.5} step={0.01} onChange={v=>updateHud("particleGlow",v)} />
-            <SliderRow label="Trail"      value={hud.trailAlpha}    min={0}   max={1.0} step={0.01} onChange={v=>updateHud("trailAlpha",v)} />
+            <SliderRow label="Glow ×"     value={hud.particleGlow}  min={0}   max={3.0} step={0.05} onChange={v=>updateHud("particleGlow",v)} />
+            <SliderRow label="Trail ×"    value={hud.trailAlpha}    min={0}   max={3.0} step={0.05} onChange={v=>updateHud("trailAlpha",v)} />
             <div className="my-4 border-t border-white/10" />
             <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Color</p>
             <SliderRow label="Brightness" value={hud.brightness}    min={0.3} max={1.5} step={0.01} onChange={v=>updateHud("brightness",v)} />
