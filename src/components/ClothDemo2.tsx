@@ -26,6 +26,7 @@ const T_LETTER = 2.6;  // durata convergenza lettere
 const N_PART = 2000;
 interface Part {
   x: number; y: number;
+  ox: number; oy: number; // posizione frame precedente (per scia)
   vx: number; vy: number;
   lx: number; ly: number;
   ld: number;
@@ -33,14 +34,11 @@ interface Part {
 }
 
 function initParticles(W: number, H: number): Part[] {
-  return Array.from({ length: N_PART }, () => ({
-    x:  Math.random() * W,
-    y:  Math.random() * H,
-    vx: (Math.random() - 0.5) * 0.8,
-    vy: (Math.random() - 0.5) * 0.8,
-    lx: 0, ly: 0, ld: Infinity,
-    delay: Math.random() * 0.40,
-  }));
+  return Array.from({ length: N_PART }, () => {
+    const x = Math.random() * W, y = Math.random() * H;
+    return { x, y, ox: x, oy: y, vx: (Math.random()-0.5)*0.8, vy: (Math.random()-0.5)*0.8,
+      lx: 0, ly: 0, ld: Infinity, delay: Math.random() * 0.40 };
+  });
 }
 
 function assignPartTargets(parts: Part[], lp: { x: number; y: number }[]) {
@@ -110,19 +108,21 @@ async function sampleLetters(
   await new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const h1El = document.querySelector("h1");
   if (!h1El || !W || !H) return [];
-  const cs       = getComputedStyle(h1El);
-  const fontSize = parseFloat(cs.fontSize) || 80;
-  const ls       = parseFloat(cs.letterSpacing) || 0;
-  const h1Rect   = h1El.getBoundingClientRect();
-  const cvRect   = canvas.getBoundingClientRect();
-  const padLeft  = h1Rect.left - cvRect.left;
-  const baseY1   = h1Rect.top - cvRect.top + fontSize * 0.82;
-  const baseY2   = baseY1 + fontSize * 0.88;
+  const cs         = getComputedStyle(h1El);
+  const fontFamily = cs.fontFamily || "serif";
+  const fontStyle  = cs.fontStyle  || "normal";
+  const ls         = parseFloat(cs.letterSpacing) || 0;
+  const fontSize   = parseFloat(cs.fontSize) || 80;
+  const cvRect     = canvas.getBoundingClientRect();
+  const h1Rect     = h1El.getBoundingClientRect();
+  const padLeft    = h1Rect.left - cvRect.left;
+  const baseY1     = h1Rect.top  - cvRect.top + fontSize * 0.78;
+  const baseY2     = baseY1 + fontSize * 0.85;
   const oc = document.createElement("canvas");
   oc.width = W; oc.height = H;
   const ox = oc.getContext("2d")!;
   ox.fillStyle = "#fff";
-  ox.font = `italic ${fontSize}px ${cs.fontFamily || "serif"}`;
+  ox.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
   ox.textAlign = "left"; ox.textBaseline = "alphabetic";
   if ("letterSpacing" in ox)
     (ox as unknown as Record<string,string>).letterSpacing =
@@ -139,9 +139,9 @@ async function sampleLetters(
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
-const HUD_KEY = "lab2-hud-v2";
-interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; }
-const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0 };
+const HUD_KEY = "lab2-hud-v3";
+interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; particleGlow: number; trailAlpha: number; }
+const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 0.7, trailAlpha: 0.28 };
 function loadHud(): HudVals {
   try { const s = localStorage.getItem(HUD_KEY); return s ? { ...HUD_DEF, ...JSON.parse(s) } : HUD_DEF; }
   catch { return HUD_DEF; }
@@ -386,6 +386,7 @@ export function ClothDemo2() {
               p.vx *= 0.88; p.vy *= 0.88;
             }
           }
+          p.ox = p.x; p.oy = p.y;
           p.x += p.vx; p.y += p.vy;
         }
       }
@@ -489,21 +490,39 @@ export function ClothDemo2() {
 
       // ── Particle cloud (fase 0 e 1) ───────────────────────────────────
       if (!inDissolve && ph < 2) {
+        const { particleGlow, trailAlpha } = hudRef.current;
         const partFade = ph===0 ? 1 : Math.max(0, 1 - at * 1.2);
         if (partFade > 0.01) {
           for (const p of parts) {
-            const localT = ph===1 ? Math.max(0,(at-p.delay)/Math.max(0.01,1-p.delay)) : 0;
-            const glow   = localT > 0.25 ? Math.min(1,(localT-0.25)/0.45) : 0;
-            const a  = partFade * (0.30 + glow * 0.52) * brightness;
-            const r  = 1.0 + glow * 1.4;
-            const rc = Math.round(80  + glow * 130);
-            const gc = Math.round(170 + glow * 65);
-            ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2);
-            ctx.fillStyle=`rgba(${rc},${gc},255,${a.toFixed(3)})`; ctx.fill();
-            if (a > 0.18) {
-              ctx.beginPath(); ctx.arc(p.x,p.y,r*3.5,0,Math.PI*2);
-              ctx.fillStyle=`rgba(80,170,255,${(a*0.07).toFixed(3)})`; ctx.fill();
+            const localT   = ph===1 ? Math.max(0,(at-p.delay)/Math.max(0.01,1-p.delay)) : 0;
+            const converge = localT > 0.25 ? Math.min(1,(localT-0.25)/0.45) : 0;
+            const baseA    = partFade * (0.28 + converge * 0.48) * brightness;
+
+            // Scia: linea dal frame precedente
+            const trailDx = p.x - p.ox, trailDy = p.y - p.oy;
+            const trailLen = Math.hypot(trailDx, trailDy);
+            if (trailLen > 0.5 && trailAlpha > 0.01) {
+              const ta = baseA * trailAlpha * 0.7;
+              ctx.beginPath(); ctx.moveTo(p.ox, p.oy); ctx.lineTo(p.x, p.y);
+              ctx.strokeStyle = `rgba(200,220,255,${ta.toFixed(3)})`;
+              ctx.lineWidth   = 0.7 + converge * 0.5;
+              ctx.stroke();
             }
+
+            // Glow halo bianco (anello esterno)
+            if (particleGlow > 0.01 && baseA > 0.08) {
+              const glowR = (2.0 + converge * 2.5) * particleGlow;
+              const glowA = baseA * particleGlow * (0.10 + converge * 0.12);
+              ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, Math.PI*2);
+              ctx.fillStyle = `rgba(200,225,255,${glowA.toFixed(3)})`; ctx.fill();
+            }
+
+            // Dot core: bianco-blu
+            const coreR = 0.9 + converge * 1.2;
+            const rC    = Math.round(180 + converge * 75);
+            const gC    = Math.round(210 + converge * 45);
+            ctx.beginPath(); ctx.arc(p.x, p.y, coreR, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(${rC},${gC},255,${baseA.toFixed(3)})`; ctx.fill();
           }
         }
       }
@@ -626,6 +645,10 @@ export function ClothDemo2() {
             <SliderRow label="Intensity"  value={hud.waveIntensity} min={0}   max={1}   step={0.01} onChange={v=>updateHud("waveIntensity",v)} />
             <SliderRow label="Speed"      value={hud.waveSpeed}     min={0.5} max={4.0} step={0.05} onChange={v=>updateHud("waveSpeed",v)} />
             <SliderRow label="Angle"      value={hud.waveAngle}     min={0}   max={360} step={1}    onChange={v=>updateHud("waveAngle",v)} unit="°" />
+            <div className="my-4 border-t border-white/10" />
+            <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Particles</p>
+            <SliderRow label="Glow"       value={hud.particleGlow}  min={0}   max={1.5} step={0.01} onChange={v=>updateHud("particleGlow",v)} />
+            <SliderRow label="Trail"      value={hud.trailAlpha}    min={0}   max={1.0} step={0.01} onChange={v=>updateHud("trailAlpha",v)} />
             <div className="my-4 border-t border-white/10" />
             <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Color</p>
             <SliderRow label="Brightness" value={hud.brightness}    min={0.3} max={1.5} step={0.01} onChange={v=>updateHud("brightness",v)} />
