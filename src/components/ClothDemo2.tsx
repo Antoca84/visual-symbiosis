@@ -5,8 +5,9 @@ const ROWS = 28;
 const GRAVITY = 0.13;
 const DAMPING = 0.986;
 const ITER    = 6;
+const ITER_INTERACTIVE = 2;
 const MOUSE_R = 90;
-const TEAR_MULT = 1.8;
+const TEAR_MULT = 1.5;
 
 const T_SETTLE  = 1.4;
 const T_ATTRACT = 3.0;
@@ -191,8 +192,8 @@ export function ClothDemo2() {
           const prox = (1 - md2 / MOUSE_R);
           if (down) {
             // Pull verso mouse → stira → strappa
-            p.x += (mx - p.x) * prox * 0.40;
-            p.y += (my - p.y) * prox * 0.40;
+            p.x += (mx - p.x) * prox * 0.80;
+            p.y += (my - p.y) * prox * 0.80;
           } else {
             // Push outward → arriccia la tela
             const inv = 1 / (md2 || 0.001);
@@ -205,8 +206,28 @@ export function ClothDemo2() {
         }
       }
 
+      // ── Pre-constraint tear pass (cattura tensione prima che venga normalizzata)
+      if (phase === 2) {
+        for (const s of segs) {
+          if (!s.on) continue;
+          const pa = pts[s.a], pb = pts[s.b];
+          const dist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+          const tear = s.rest * TEAR_MULT;
+          s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
+          if (dist > tear) { s.on = false; continue; }
+          // Tear diretto vicino al mouse durante drag
+          if (down) {
+            const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
+            if (Math.hypot(cmx - mx, cmy - my) < 32 && dist > s.rest * 1.15) {
+              s.on = false;
+            }
+          }
+        }
+      }
+
       // ── Constraints ───────────────────────────────────────────────────
-      for (let it = 0; it < ITER; it++) {
+      const iter = phase === 2 ? ITER_INTERACTIVE : ITER;
+      for (let it = 0; it < iter; it++) {
         for (const s of segs) {
           if (!s.on) continue;
           const pa = pts[s.a], pb = pts[s.b];
