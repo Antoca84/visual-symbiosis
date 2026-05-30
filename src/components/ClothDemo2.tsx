@@ -6,7 +6,7 @@ const GRAVITY = 0.13;
 const DAMPING = 0.986;
 const ITER    = 6;
 const MOUSE_R = 90;
-const TEAR_MULT = 2.1;
+const TEAR_MULT = 1.8;
 
 const T_SETTLE  = 1.4;
 const T_ATTRACT = 3.0;
@@ -103,6 +103,9 @@ export function ClothDemo2() {
     let pts: Pt[] = [], segs: Seg[] = [];
     let t0: number | null = null;
     let ready = false;
+    let rebuilding = false;
+    let rebuildT = 0;
+    let totalSegs = 0;
 
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
@@ -110,7 +113,8 @@ export function ClothDemo2() {
       canvas.width = W * dpr; canvas.height = H * dpr;
       ctx.scale(dpr, dpr);
       const d = build(W, H); pts = d.pts; segs = d.segs;
-      ready = false; t0 = null;
+      totalSegs = segs.length;
+      ready = false; t0 = null; rebuilding = false; rebuildT = 0;
       sampleLetters(W, H).then(lp => { assignTargets(pts, lp); ready = true; });
     };
     resize();
@@ -162,7 +166,9 @@ export function ClothDemo2() {
           const isLetter = p.ld < 18;
           if (isLetter) {
             // Forza forte verso target + cancella gravity gradualmente
-            const str = Math.min(0.32, t * t * 0.38);
+            // heatMask: mouse caldo azzera attraction → permette strappo
+            const heatMask = Math.max(0, 1 - p.heat * 4);
+            const str = Math.min(0.32, t * t * 0.38) * heatMask;
             const dx = p.lx - p.x, dy = p.ly - p.y;
             p.x += dx * str;
             p.y += dy * str;
@@ -184,10 +190,16 @@ export function ClothDemo2() {
         if (md2 < MOUSE_R) {
           const prox = (1 - md2 / MOUSE_R);
           if (down) {
-            p.x += (mx - p.x) * prox * 0.28;
-            p.y += (my - p.y) * prox * 0.28;
+            // Pull verso mouse → stira → strappa
+            p.x += (mx - p.x) * prox * 0.40;
+            p.y += (my - p.y) * prox * 0.40;
+          } else {
+            // Push outward → arriccia la tela
+            const inv = 1 / (md2 || 0.001);
+            p.x += dx * inv * prox * 2.2;
+            p.y += dy * inv * prox * 2.2;
           }
-          p.heat = Math.min(1, p.heat + prox * 0.09);
+          p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
           p.heat *= 0.94;
         }
@@ -208,6 +220,34 @@ export function ClothDemo2() {
           if (!pa.pinned) { pa.x -= ox; pa.y -= oy; }
           if (!pb.pinned) { pb.x += ox; pb.y += oy; }
         }
+      }
+
+      // ── Rebuild trigger + laser physics ──────────────────────────────
+      if (phase === 2 && ready && totalSegs > 0) {
+        const brokenCount = segs.reduce((n, s) => n + (s.on ? 0 : 1), 0);
+        if (!rebuilding && brokenCount / totalSegs >= 0.40) {
+          rebuilding = true;
+          rebuildT = 0;
+        }
+      }
+      if (rebuilding) {
+        rebuildT = Math.min(1, rebuildT + 0.007);
+        const laserX = rebuildT * W;
+        for (const s of segs) {
+          const midX = (pts[s.a].x + pts[s.b].x) * 0.5;
+          if (!s.on && midX < laserX) {
+            s.on = true;
+            for (const idx of [s.a, s.b]) {
+              const p = pts[idx];
+              if (!p.pinned) {
+                p.x += (p.lx - p.x) * 0.25;
+                p.y += (p.ly - p.y) * 0.25;
+                p.px = p.x; p.py = p.y;
+              }
+            }
+          }
+        }
+        if (rebuildT >= 1) rebuilding = false;
       }
 
       // ── Draw ──────────────────────────────────────────────────────────
@@ -254,6 +294,21 @@ export function ClothDemo2() {
         if (!p.pinned) continue;
         ctx.fillStyle = "rgba(58,134,214,0.45)";
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Laser rebuild sweep
+      if (rebuilding) {
+        const laserX = rebuildT * W;
+        const grad = ctx.createLinearGradient(laserX - 40, 0, laserX + 8, 0);
+        grad.addColorStop(0, "rgba(58,134,214,0)");
+        grad.addColorStop(0.65, "rgba(120,200,255,0.30)");
+        grad.addColorStop(1, "rgba(200,240,255,0.80)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(laserX - 40, 0, 48, H);
+        ctx.beginPath();
+        ctx.moveTo(laserX, 0); ctx.lineTo(laserX, H);
+        ctx.strokeStyle = "rgba(200,240,255,0.92)";
+        ctx.lineWidth = 1.5; ctx.stroke();
       }
     }
 
