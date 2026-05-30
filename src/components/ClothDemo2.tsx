@@ -140,7 +140,7 @@ export function ClothDemo2() {
     const mm = (e: MouseEvent) => Object.assign(mou.current, pos(e));
     const md = (e: MouseEvent) => { mou.current.down = true; mm(e); };
     const mu = () => { mou.current.down = false; };
-    canvas.addEventListener("mousemove", mm);
+    window.addEventListener("mousemove", mm);
     canvas.addEventListener("mousedown", md);
     window.addEventListener("mouseup", mu);
     canvas.addEventListener("touchmove", (e) => {
@@ -333,7 +333,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.22) {
+        if (broken / segs.length >= 0.10) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
@@ -422,6 +422,7 @@ export function ClothDemo2() {
     return () => {
       cancelAnimationFrame(raf.current);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("mousemove", mm);
       window.removeEventListener("mouseup", mu);
     };
   }, []);

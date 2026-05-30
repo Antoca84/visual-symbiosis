@@ -8,7 +8,7 @@ const Lab2 = () => (
     <section className="relative h-svh md:h-screen w-full overflow-hidden flex items-center md:items-end md:pb-24">
       <ClothDemo2 />
 
-      <div className="relative z-10 px-6 md:px-12 w-full">
+      <div className="relative z-10 px-6 md:px-12 w-full pointer-events-none">
         <div className="border-l border-white/20 pl-4 md:pl-6 inline-block mb-3 md:mb-4">
           <span className="text-[9px] tracking-[0.35em] uppercase text-white/25">
             Visual Laboratory · Verlet B
