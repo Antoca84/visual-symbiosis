@@ -115,6 +115,7 @@ export function ClothDemo2() {
     let dissolveExploding = false;
     let dissolveOriginX = 0, dissolveOriginY = 0;
     let dissolveT = 0;
+    let gridEntryT = -1; // timestamp entrata phase 2 per rampa clearAlpha
 
     // Ricostruzione animata: onda verso l'alto poi ricaduta
     const reconstruct = (ts: number) => {
@@ -134,6 +135,7 @@ export function ClothDemo2() {
       dissolveTriggered = false;
       dissolveExploding = false;
       dissolveT = 0;
+      gridEntryT = -1;
       t0 = ts; // fase 0: settle da capo (cloth sale poi ricade, poi attract)
     };
 
@@ -144,7 +146,7 @@ export function ClothDemo2() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const d = build(W, H); pts = d.pts; segs = d.segs;
       ready = false; t0 = null; letterPixels = [];
-      dissolveTriggered = false; dissolveExploding = false; dissolveT = 0;
+      dissolveTriggered = false; dissolveExploding = false; dissolveT = 0; gridEntryT = -1;
       sampleLetters(W, H).then(lp => {
         letterPixels = lp;
         assignTargets(pts, lp);
@@ -240,7 +242,7 @@ export function ClothDemo2() {
           reconstruct(lastTs);
         }
 
-        render(dissolveTriggered);
+        render(0.055, true);
         return;
       }
 
@@ -357,15 +359,19 @@ export function ClothDemo2() {
         }
       }
 
-      render(false);
+      // clearAlpha per fase (come HeroGridNebula)
+      if (phase === 2 && gridEntryT < 0 && !dissolveTriggered) gridEntryT = ts;
+      if (dissolveTriggered || phase < 2) gridEntryT = -1;
+      const gridAge = gridEntryT >= 0 ? (ts - gridEntryT) / 1000 : 0;
+      const clearAlpha = phase === 0 ? 0.11
+        : phase === 1 ? 0.18
+        : 0.18 + 0.77 * Math.min(1, gridAge / 1.5);
+
+      render(clearAlpha, false);
     }
 
-    function render(inDissolve: boolean) {
-      if (inDissolve) {
-        ctx.fillStyle = "rgba(11,13,20,0.055)";
-      } else {
-        ctx.fillStyle = "#0b0d14";
-      }
+    function render(clearAlpha: number, inDissolve: boolean) {
+      ctx.fillStyle = `rgba(11,13,20,${clearAlpha.toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
       ctx.lineCap = "round";
 
@@ -428,6 +434,18 @@ export function ClothDemo2() {
         ctx.beginPath(); ctx.arc(cmx, cmy, 2.5, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
       }
+
+      // Gradiente inferiore (identico HeroGridNebula)
+      const gd = ctx.createLinearGradient(0, H * 0.65, 0, H);
+      gd.addColorStop(0, "rgba(0,0,0,0)");
+      gd.addColorStop(1, "rgba(11,13,20,1)");
+      ctx.fillStyle = gd; ctx.fillRect(0, 0, W, H);
+
+      // Vignette radiale (identico HeroGridNebula)
+      const vig = ctx.createRadialGradient(W * 0.5, H * 0.5, W * 0.18, W * 0.5, H * 0.5, W * 0.82);
+      vig.addColorStop(0, "rgba(0,0,0,0)");
+      vig.addColorStop(1, "rgba(11,13,20,0.72)");
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
     }
 
     raf.current = requestAnimationFrame(frame);
