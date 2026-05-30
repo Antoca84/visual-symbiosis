@@ -5,7 +5,7 @@ const ROWS = 28;
 const GRAVITY = 0.13;
 const DAMPING = 0.986;
 const ITER    = 6;
-const MOUSE_R = 90;
+const MOUSE_R = 60;
 const TEAR_MULT = 1.5;
 
 const T_SETTLE  = 1.4;
@@ -258,9 +258,10 @@ export function ClothDemo2() {
           const tear = s.rest * TEAR_MULT;
           s.ten = Math.max(0, Math.min(1, (dist - s.rest) / (tear - s.rest)));
           if (dist > tear) { s.on = false; continue; }
+          // Tear diretto: il midpoint del segmento passa vicino al mouse durante drag
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 32 && dist > s.rest * 1.12) {
+            if (Math.hypot(cmx - mx, cmy - my) < 18) {
               s.on = false;
             }
           }
@@ -288,7 +289,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && totalSegs > 0 && !rebuilding) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / totalSegs >= 0.35) {
+        if (broken / totalSegs >= 0.25) {
           rebuilding = true;
           rebuildT = 0;
           console.log("[cloth] rebuild triggered", broken, "/", totalSegs);
