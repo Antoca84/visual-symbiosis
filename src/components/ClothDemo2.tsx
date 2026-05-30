@@ -264,8 +264,8 @@ export function ClothDemo2() {
           } else {
             // Hover: movimento gentile
             const inv = 1 / (md2 || 0.001);
-            p.x += ddx * inv * prox * 0.7;
-            p.y += ddy * inv * prox * 0.7;
+            p.x += ddx * inv * prox * 0.77;
+            p.y += ddy * inv * prox * 0.77;
           }
           p.heat = Math.min(1, p.heat + prox * 0.12);
         } else {
@@ -334,17 +334,26 @@ export function ClothDemo2() {
         const pa = pts[s.a], pb = pts[s.b];
         const h = Math.max(s.ten, (pa.heat + pb.heat) * 0.5);
 
+        // Calore: blu (freddo) → rosso (bordo) → giallo (medio) → bianco (centro)
         let r: number, g: number, b: number;
-        if (h > 0.65) {
-          const f = (h - 0.65) / 0.35;
-          r = Math.round(147 + (255 - 147) * f);
-          g = Math.round(37 * (1 - f * 0.7));
-          b = Math.round(37 * (1 - f * 0.9));
-        } else if (h > 0.2) {
-          const f = (h - 0.2) / 0.45;
-          r = Math.round(58 + (147 - 58) * f);
-          g = Math.round(134 + (37 - 134) * f);
-          b = Math.round(214 + (37 - 214) * f);
+        if (h > 0.72) {
+          // giallo → bianco
+          const f = (h - 0.72) / 0.28;
+          r = 255;
+          g = Math.round(210 + (255 - 210) * f);
+          b = Math.round(0 + 255 * f);
+        } else if (h > 0.38) {
+          // rosso → giallo
+          const f = (h - 0.38) / 0.34;
+          r = 230;
+          g = Math.round(40 + (210 - 40) * f);
+          b = 0;
+        } else if (h > 0.12) {
+          // blu → rosso
+          const f = (h - 0.12) / 0.26;
+          r = Math.round(58 + (230 - 58) * f);
+          g = Math.round(134 * (1 - f));
+          b = Math.round(214 * (1 - f));
         } else {
           r = 58; g = 134; b = 214;
         }
@@ -383,39 +392,15 @@ export function ClothDemo2() {
         ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
       }
 
-      // Reticolo termico (mirino)
+      // Cursore: cerchio influenza + punto centrale
       const { x: cmx, y: cmy } = mou.current;
       if (cmx >= 0 && cmx <= W && cmy >= 0 && cmy <= H) {
-        // Glow esterno — rosso
-        const grad = ctx.createRadialGradient(cmx, cmy, MOUSE_R * 0.4, cmx, cmy, MOUSE_R);
-        grad.addColorStop(0, "rgba(220,50,30,0.18)");
-        grad.addColorStop(1, "rgba(220,50,30,0)");
         ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
-        ctx.fillStyle = grad; ctx.fill();
-
-        // Anello rosso esterno
-        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(220,50,30,0.45)";
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.lineWidth = 1; ctx.stroke();
 
-        // Anello giallo medio
-        ctx.beginPath(); ctx.arc(cmx, cmy, MOUSE_R * 0.35, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255,210,50,0.65)";
-        ctx.lineWidth = 1; ctx.stroke();
-
-        // Centro bianco
-        ctx.beginPath(); ctx.arc(cmx, cmy, 3, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255,255,255,0.95)"; ctx.fill();
-
-        // Mirino — 4 segmenti con gap al centro
-        const arm = 14, gap = 5;
-        ctx.beginPath();
-        ctx.moveTo(cmx - arm, cmy); ctx.lineTo(cmx - gap, cmy);
-        ctx.moveTo(cmx + gap, cmy); ctx.lineTo(cmx + arm, cmy);
-        ctx.moveTo(cmx, cmy - arm); ctx.lineTo(cmx, cmy - gap);
-        ctx.moveTo(cmx, cmy + gap); ctx.lineTo(cmx, cmy + arm);
-        ctx.strokeStyle = "rgba(255,255,255,0.75)";
-        ctx.lineWidth = 1; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cmx, cmy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fill();
       }
     }
 
