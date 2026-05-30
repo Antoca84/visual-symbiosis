@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Navigation from "@/components/Navigation";
+import Footer from "@/components/Footer";
 
 const EMAIL = "hello@industrialmagic.it";
 
@@ -65,6 +66,7 @@ const Contact = () => {
           </motion.div>
         </div>
       </section>
+      <Footer />
     </main>
   );
 };

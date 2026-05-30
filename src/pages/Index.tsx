@@ -4,6 +4,7 @@ import ManifestoSection from "@/components/ManifestoSection";
 import VisualBreak from "@/components/VisualBreak";
 import DisciplinesSection from "@/components/DisciplinesSection";
 import ClosingLine from "@/components/ClosingLine";
+import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
@@ -14,6 +15,7 @@ const Index = () => {
       <VisualBreak />
       <DisciplinesSection />
       <ClosingLine />
+      <Footer />
     </main>
   );
 };

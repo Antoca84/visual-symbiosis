@@ -4,6 +4,7 @@ import Navigation from "@/components/Navigation";
 import ScrollReveal from "@/components/ScrollReveal";
 import aboutImage from "@/assets/about-studio.jpg";
 import { AboutImageOverlay } from "@/components/AboutImageOverlay";
+import Footer from "@/components/Footer";
 
 const STEP_XY = 0.005;
 const STEP_S  = 0.1;
@@ -78,6 +79,8 @@ const About = () => {
           </div>
         </div>
       </section>
+
+      <Footer />
 
       {/* ── DEBUG TRIGGER ── */}
       <button
