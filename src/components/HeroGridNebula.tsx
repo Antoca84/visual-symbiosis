@@ -497,9 +497,9 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       if (rawPhase === "grid" && !dissolveTriggered) {
         for (let i = 0; i < N_NODES; i++) {
           const n = nodes[i];
-          if (n.heat > 0.55) {
+          if (n.heat > 0.70) {
             if (!n.wasHot) { n.burnCount++; n.wasHot = true; }
-          } else if (n.heat < 0.20) {
+          } else if (n.heat < 0.25) {
             n.wasHot = false;
           }
         }
@@ -507,7 +507,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         let maxBurn = 0;
         for (let i = 0; i < N_NODES; i++) maxBurn = Math.max(maxBurn, nodes[i].burnCount);
 
-        if (maxBurn >= 1) {
+        if (maxBurn >= 2) {
           dissolveTriggered = true;
           dissolveStartTs = ts;
           // Centroide dei nodi caldi = origine del laceramento
