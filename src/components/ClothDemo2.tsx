@@ -309,11 +309,25 @@ export function ClothDemo2() {
         }
       }
 
+      // ── Fell off screen → reconstruct diretto ────────────────────────
+      if (phase === 2 && ready && !dissolveTriggered) {
+        let offScreen = 0, unpinned = 0;
+        for (const p of pts) {
+          if (!p.pinned) { unpinned++; if (p.y > H * 1.25) offScreen++; }
+        }
+        if (unpinned > 0 && offScreen / unpinned >= 0.70) {
+          const d = build(W, H);
+          pts = d.pts; segs = d.segs;
+          assignTargets(pts, letterPixels);
+          t0 = lastTs - T_SETTLE * 1000;
+        }
+      }
+
       // ── Dissolve trigger ──────────────────────────────────────────────
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.30) {
+        if (broken / segs.length >= 0.45) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
