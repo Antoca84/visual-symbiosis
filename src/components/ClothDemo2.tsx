@@ -293,7 +293,7 @@ export function ClothDemo2() {
           reconstruct(lastTs);
         }
 
-        render(0.055, true, 0.3);
+        render(0.055, true, 0.10);
         return;
       }
 
@@ -420,8 +420,8 @@ export function ClothDemo2() {
 
       // water alpha: 0 in settle, sale in attract, pieno in interactive
       const waterAlpha = phase === 0 ? 0
-        : phase === 1 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) * 0.45
-        : 0.45;
+        : phase === 1 ? Math.min(1, (el - T_SETTLE) / T_ATTRACT) * 0.18
+        : 0.18;
 
       render(clearAlpha, false, waterAlpha);
     }
