@@ -36,6 +36,33 @@ const SPAN_X  = 4.4;
 const SPAN_Y  = 2.5;
 const CAM_DIST = 2.0;
 
+// ── Link ──────────────────────────────────────────────────────────────────────
+interface Link {
+  a: number; b: number;
+  restLen: number;
+  baseThresh: number;
+  active: boolean;
+  tension: number;  // 0–1
+  tearThresh: number;
+}
+
+function makeLinks(nodes: Node[]): Link[] {
+  const links: Link[] = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      const push = (j: number) => {
+        const rl = Math.hypot(nodes[i].rx - nodes[j].rx, nodes[i].ry - nodes[j].ry);
+        const bt = rl * 2.8;
+        links.push({ a: i, b: j, restLen: rl, baseThresh: bt, active: true, tension: 0, tearThresh: bt });
+      };
+      if (c < COLS - 1) push(i + 1);
+      if (r < ROWS - 1) push(i + COLS);
+    }
+  }
+  return links;
+}
+
 // ── Node ──────────────────────────────────────────────────────────────────────
 interface Node {
   rx: number; ry: number;
@@ -93,6 +120,7 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
   const scrollRef  = useRef(0);
   const tRef       = useRef(0);
   const nodesRef   = useRef<Node[]>(makeNodes());
+  const linksRef   = useRef<Link[]>(makeLinks(nodesRef.current));
   const startRef   = useRef<number | null>(null);
   const waterRef   = useRef<{ canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; data: ImageData } | null>(null);
   const phaseRef   = useRef<string>("float");
@@ -104,14 +132,27 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
     const ctx    = canvas.getContext("2d")!;
     let W = 0, H = 0;
     const nodes = nodesRef.current;
+    const links = linksRef.current;
     let letterSampled = false;
+
+    // Node→links index per propagazione tear
+    const nodeLinks: number[][] = Array.from({ length: N_NODES }, () => []);
+    links.forEach((lk, li) => { nodeLinks[lk.a].push(li); nodeLinks[lk.b].push(li); });
+
+    const propagateTear = (linkIdx: number) => {
+      const lk = links[linkIdx];
+      const reduce = (li: number) => { if (links[li].active) links[li].tearThresh *= 0.88; };
+      nodeLinks[lk.a].forEach(reduce);
+      nodeLinks[lk.b].forEach(reduce);
+    };
+
+    let tearFlashes: Array<{ x: number; y: number; r: number; life: number }> = [];
 
     // Dissolve state (closure vars, reset on restart)
     let dissolveTriggered = false;
     let dissolveExploding = false;
     let dissolveStartTs: number | null = null;
-    let dissolveOriginRx = 0, dissolveOriginRy = 0; // centroide hotspot in grid space
-    let sustainedHeatFrames = 0;
+    let dissolveOriginRx = 0, dissolveOriginRy = 0;
     let gridEntryTs: number | null = null;
     let idleFrames = 0;
 
@@ -493,42 +534,46 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
         }
       }
 
-      // ── Burn tracking + dissolve trigger ─────────────────────────────────────
+      // ── Link tension + tear + dissolve trigger ───────────────────────────────
+      let brokenLinks = 0;
       if (rawPhase === "grid" && !dissolveTriggered) {
-        for (let i = 0; i < N_NODES; i++) {
-          const n = nodes[i];
-          if (n.heat > 0.70) {
-            if (!n.wasHot) { n.burnCount++; n.wasHot = true; }
-          } else if (n.heat < 0.25) {
-            n.wasHot = false;
+        for (let li = 0; li < links.length; li++) {
+          const lk = links[li];
+          if (!lk.active) { brokenLinks++; continue; }
+          const na = nodes[lk.a], nb = nodes[lk.b];
+          const cdx = (na.rx + na.dx) - (nb.rx + nb.dx);
+          const cdy = (na.ry + na.dy) - (nb.ry + nb.dy);
+          const cdz = na.dz - nb.dz;
+          const cur = Math.sqrt(cdx * cdx + cdy * cdy + cdz * cdz);
+          lk.tension = Math.max(0, Math.min(1, (cur - lk.restLen) / (lk.tearThresh - lk.restLen)));
+          if (cur > lk.tearThresh) {
+            lk.active = false;
+            brokenLinks++;
+            propagateTear(li);
+            const pa = projCache[lk.a], pb = projCache[lk.b];
+            if (pa && pb) tearFlashes.push({ x: (pa.sx + pb.sx) * 0.5, y: (pa.sy + pb.sy) * 0.5, r: 0, life: 10 });
           }
         }
 
-        let maxBurn = 0;
-        for (let i = 0; i < N_NODES; i++) maxBurn = Math.max(maxBurn, nodes[i].burnCount);
-
-        if (maxBurn >= 2) {
+        if (brokenLinks / links.length >= 0.30) {
           dissolveTriggered = true;
           dissolveStartTs = ts;
-          // Centroide dei nodi caldi = origine del laceramento
           let hcx = 0, hcy = 0, hc = 0;
           for (const n of nodes) {
-            if (n.heat > 0.25) { hcx += n.rx; hcy += n.ry; hc++; }
+            if (n.heat > 0.2) { hcx += n.rx; hcy += n.ry; hc++; }
           }
           if (hc > 0) { hcx /= hc; hcy /= hc; }
-          dissolveOriginRx = hcx;
-          dissolveOriginRy = hcy;
+          dissolveOriginRx = hcx; dissolveOriginRy = hcy;
           const maxSpan = Math.sqrt(SPAN_X * SPAN_X + SPAN_Y * SPAN_Y) * 2;
           for (const n of nodes) {
             const dist = Math.hypot(n.rx - hcx, n.ry - hcy);
             n.dissolveDelay = (dist / maxSpan) * 0.9;
-            // Kick immediato solo ai nodi caldi, direzione outward dal centroide
-            if (n.heat > 0.25) {
+            if (n.heat > 0.2) {
               const dx = n.rx - hcx, dy = n.ry - hcy;
               const dlen = Math.sqrt(dx * dx + dy * dy) + 0.01;
               const str = 0.06 + n.heat * 0.18;
               n.vx += (dx / dlen) * str + (Math.random() - 0.5) * 0.03;
-              n.vy += (dy / dlen) * str * 0.8 + (Math.random() - 0.5) * 0.03;
+              n.vy += (dy / dlen) * str * 0.8;
               n.vz += (Math.random() - 0.5) * str * 0.6;
             }
             n.locked = false;
@@ -578,6 +623,8 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
             n.dx = 0; n.dy = 0; n.dz = 0;
             n.burnCount = 0; n.wasHot = false; n.dissolveDelay = 0;
           }
+          for (const lk of links) { lk.active = true; lk.tension = 0; lk.tearThresh = lk.baseThresh; }
+          tearFlashes = [];
           startRef.current = ts - (P1 + P_LETTER + 0.05) * 1000;
         }
       }
@@ -661,83 +708,141 @@ export function HeroGridNebula({ scrollYProgress }: Props) {
       if (phase === "converge" || phase === "grid" || phase === "dissolve") {
         ctx.lineCap = "round"; ctx.lineJoin = "round";
 
-        const drawSeg = (i: number, j: number) => {
-          const ni = nodes[i], nj = nodes[j];
-          if (phase === "converge" && (!ni.locked || !nj.locked)) return;
-          const a = projCache[i], b = projCache[j];
-          if (!a || !b) return;
-
-          const avgDz   = (ni.dz + nj.dz) * 0.5;
-          const avgHeat = (ni.heat + nj.heat) * 0.5;
-          // Linee scompaiono proporzionalmente al displacement dei nodi (non a timer)
-          const dissolveLineFade = phase === "dissolve"
-            ? Math.max(0, 1 - Math.hypot(ni.x - ni.rx, ni.y - ni.ry) / 2.2) *
-              Math.max(0, 1 - Math.hypot(nj.x - nj.rx, nj.y - nj.ry) / 2.2)
-            : 1;
-          if (dissolveLineFade < 0.01) return;
-          let r: number, g: number, bl: number;
-          if (avgHeat > 0.01) {
-            if (avgHeat > 0.65) {
-              const f = (avgHeat - 0.65) / 0.35;
-              r  = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * f);
-              g  = Math.round(ARTERIAL[1] + (255 - ARTERIAL[1]) * f);
-              bl = Math.round(ARTERIAL[2] + (255 - ARTERIAL[2]) * f);
-            } else {
-              const f = avgHeat / 0.65;
-              r  = Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * f);
-              g  = Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * f);
-              bl = Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * f);
-            }
-          } else {
+        if (phase === "converge") {
+          // Converge: vecchia logica row/col senza links
+          const drawSeg = (i: number, j: number) => {
+            const ni = nodes[i], nj = nodes[j];
+            if (!ni.locked || !nj.locked) return;
+            const a = projCache[i], b = projCache[j];
+            if (!a || !b) return;
+            const avgDz = (ni.dz + nj.dz) * 0.5;
             const t2 = Math.max(0, Math.min(1, avgDz * 1.8 + 0.45));
+            let r: number, g: number, bl: number;
             if (t2 < 0.5) {
               const f = t2 * 2;
-              r  = Math.round(DEEP_BLUE[0] + (COLD_BLUE[0] - DEEP_BLUE[0]) * f);
-              g  = Math.round(DEEP_BLUE[1] + (COLD_BLUE[1] - DEEP_BLUE[1]) * f);
+              r = Math.round(DEEP_BLUE[0] + (COLD_BLUE[0] - DEEP_BLUE[0]) * f);
+              g = Math.round(DEEP_BLUE[1] + (COLD_BLUE[1] - DEEP_BLUE[1]) * f);
               bl = Math.round(DEEP_BLUE[2] + (COLD_BLUE[2] - DEEP_BLUE[2]) * f);
             } else {
               const f = (t2 - 0.5) * 2;
-              r  = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
-              g  = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
+              r = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
+              g = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
               bl = Math.round(COLD_BLUE[2] + (245 - COLD_BLUE[2]) * f);
             }
-          }
-          const disp  = Math.abs(avgDz);
-          const avgRx = (ni.rx + nj.rx) * 0.5;
-          const avgRy = (ni.ry + nj.ry) * 0.5;
-          const wave  = waveAmp > 0 ? Math.max(0, Math.sin(avgRx * 1.1 + avgRy * 0.25 - t * 0.75)) * waveAmp : 0;
-          const alpha = Math.min(0.92, 0.20 + disp * 2.6 + avgHeat * 0.5 + wave * 0.45) * dissolveLineFade;
-          if (alpha < 0.01) return;
-          const lw    = Math.min(3.2, 0.65 + disp * 5.5 + avgHeat * 1.8 + wave * 0.6);
-          ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
-          ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
-          ctx.lineWidth = lw; ctx.stroke();
-        };
+            const disp = Math.abs(avgDz);
+            const alpha = Math.min(0.92, 0.20 + disp * 2.6);
+            if (alpha < 0.01) return;
+            ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+            ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
+            ctx.lineWidth = 0.65 + disp * 5.5; ctx.stroke();
+          };
+          for (let r = 0; r < ROWS; r++)
+            for (let c = 0; c < COLS - 1; c++)
+              drawSeg(r * COLS + c, r * COLS + c + 1);
+          for (let r = 0; r < ROWS - 1; r++)
+            for (let c = 0; c < COLS; c++)
+              drawSeg(r * COLS + c, (r + 1) * COLS + c);
+        } else {
+          // Grid / dissolve: link-based con tensione, colore reattivo, flash
+          ctx.shadowBlur = 0;
+          for (const lk of links) {
+            if (!lk.active) continue;
+            const ni = nodes[lk.a], nj = nodes[lk.b];
+            const a = projCache[lk.a], b = projCache[lk.b];
+            if (!a || !b) continue;
 
-        for (let r = 0; r < ROWS; r++)
-          for (let c = 0; c < COLS - 1; c++)
-            drawSeg(r * COLS + c, r * COLS + c + 1);
-        for (let r = 0; r < ROWS - 1; r++)
-          for (let c = 0; c < COLS; c++)
-            drawSeg(r * COLS + c, (r + 1) * COLS + c);
+            const dissolveLineFade = phase === "dissolve"
+              ? Math.max(0, 1 - Math.hypot(ni.x - ni.rx, ni.y - ni.ry) / 2.2) *
+                Math.max(0, 1 - Math.hypot(nj.x - nj.rx, nj.y - nj.ry) / 2.2)
+              : 1;
+            if (dissolveLineFade < 0.01) continue;
 
-        if (phase === "grid") {
-          for (let i = 0; i < N_NODES; i++) {
-            const pr = projCache[i];
-            if (!pr) continue;
-            const n = nodes[i];
-            const dz = n.dz;
-            const h = n.heat;
-            const waveDot = waveAmp > 0 ? Math.max(0, Math.sin(n.rx * 1.1 + n.ry * 0.25 - t * 0.75)) * waveAmp : 0;
-            if (dz < 0.18 && waveDot < 0.05) continue;
-            const intensity = Math.min(1, (dz - 0.18) / 0.5);
-            const dotR = h > 0.5 ? 255 : Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * h * 2);
-            const dotG = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.4)) : Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * h * 2);
-            const dotB = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.8)) : Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * h * 2);
-            const dotAlpha = Math.max(intensity, h) * 0.8 + waveDot * 0.3;
-            ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${dotAlpha.toFixed(4)})`;
-            ctx.beginPath(); ctx.arc(pr.sx, pr.sy, Math.max(0.4, intensity * 2.8 + waveDot * 1.2), 0, Math.PI * 2); ctx.fill();
+            const ten = lk.tension;
+            const avgDz = (ni.dz + nj.dz) * 0.5;
+            const avgRx = (ni.rx + nj.rx) * 0.5;
+            const avgRy = (ni.ry + nj.ry) * 0.5;
+            const wave = waveAmp > 0 ? Math.max(0, Math.sin(avgRx * 1.1 + avgRy * 0.25 - t * 0.75)) * waveAmp : 0;
+
+            let r: number, g: number, bl: number;
+            if (ten > 0.65) {
+              // Alta tensione → rosso arterioso → bianco
+              const f = (ten - 0.65) / 0.35;
+              r  = Math.round(ARTERIAL[0] + (255 - ARTERIAL[0]) * f);
+              g  = Math.round(ARTERIAL[1] * (1 - f * 0.6));
+              bl = Math.round(ARTERIAL[2] * (1 - f * 0.8));
+            } else if (ten > 0.2) {
+              // Tensione media → blu→rosso
+              const f = (ten - 0.2) / 0.45;
+              r  = Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * f);
+              g  = Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * f);
+              bl = Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * f);
+            } else {
+              const t2 = Math.max(0, Math.min(1, avgDz * 1.8 + 0.45));
+              if (t2 < 0.5) {
+                const f = t2 * 2;
+                r  = Math.round(DEEP_BLUE[0] + (COLD_BLUE[0] - DEEP_BLUE[0]) * f);
+                g  = Math.round(DEEP_BLUE[1] + (COLD_BLUE[1] - DEEP_BLUE[1]) * f);
+                bl = Math.round(DEEP_BLUE[2] + (COLD_BLUE[2] - DEEP_BLUE[2]) * f);
+              } else {
+                const f = (t2 - 0.5) * 2;
+                r  = Math.round(COLD_BLUE[0] + (220 - COLD_BLUE[0]) * f);
+                g  = Math.round(COLD_BLUE[1] + (228 - COLD_BLUE[1]) * f);
+                bl = Math.round(COLD_BLUE[2] + (245 - COLD_BLUE[2]) * f);
+              }
+            }
+
+            const disp  = Math.abs(avgDz);
+            const alpha = Math.min(0.95, 0.20 + disp * 2.6 + ten * 0.55 + wave * 0.45) * dissolveLineFade;
+            if (alpha < 0.01) continue;
+            const lw = Math.min(3.8, 0.65 + disp * 5.5 + ten * 2.2 + wave * 0.6);
+
+            // Glow: doppio layer (semi-trasparente largo + opaco stretto) invece di shadowBlur
+            if (ten > 0.55) {
+              ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+              ctx.strokeStyle = `rgba(${r},${g},${bl},${(alpha * 0.25).toFixed(4)})`;
+              ctx.lineWidth = lw * 4; ctx.stroke();
+            }
+
+            ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+            ctx.strokeStyle = `rgba(${r},${g},${bl},${alpha.toFixed(4)})`;
+            ctx.lineWidth = lw; ctx.stroke();
           }
+
+          // Dot sui nodi (solo grid phase)
+          if (phase === "grid") {
+            for (let i = 0; i < N_NODES; i++) {
+              const pr = projCache[i];
+              if (!pr) continue;
+              const n = nodes[i];
+              const dz = n.dz;
+              const h = n.heat;
+              const waveDot = waveAmp > 0 ? Math.max(0, Math.sin(n.rx * 1.1 + n.ry * 0.25 - t * 0.75)) * waveAmp : 0;
+              if (dz < 0.18 && waveDot < 0.05) continue;
+              const intensity = Math.min(1, (dz - 0.18) / 0.5);
+              const dotR = h > 0.5 ? 255 : Math.round(COLD_BLUE[0] + (ARTERIAL[0] - COLD_BLUE[0]) * h * 2);
+              const dotG = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.4)) : Math.round(COLD_BLUE[1] + (ARTERIAL[1] - COLD_BLUE[1]) * h * 2);
+              const dotB = h > 0.5 ? Math.round(255 * (1 - (h - 0.5) * 1.8)) : Math.round(COLD_BLUE[2] + (ARTERIAL[2] - COLD_BLUE[2]) * h * 2);
+              const dotAlpha = Math.max(intensity, h) * 0.8 + waveDot * 0.3;
+              ctx.fillStyle = `rgba(${dotR},${dotG},${dotB},${dotAlpha.toFixed(4)})`;
+              ctx.beginPath(); ctx.arc(pr.sx, pr.sy, Math.max(0.4, intensity * 2.8 + waveDot * 1.2), 0, Math.PI * 2); ctx.fill();
+            }
+          }
+
+          // Tear flashes (punti di rottura)
+          ctx.globalCompositeOperation = "lighter";
+          for (let i = tearFlashes.length - 1; i >= 0; i--) {
+            const f = tearFlashes[i];
+            f.r += 3; f.life--;
+            if (f.life <= 0) { tearFlashes.splice(i, 1); continue; }
+            const fa = f.life / 10;
+            const grd = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 3);
+            grd.addColorStop(0,   `rgba(255,180,80,${fa.toFixed(3)})`);
+            grd.addColorStop(0.4, `rgba(200,60,20,${(fa * 0.35).toFixed(3)})`);
+            grd.addColorStop(1,   "rgba(0,0,0,0)");
+            ctx.fillStyle = grd;
+            ctx.beginPath(); ctx.arc(f.x, f.y, f.r * 3, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.globalCompositeOperation = "lighter";
         }
       }
 
