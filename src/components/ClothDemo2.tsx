@@ -308,11 +308,12 @@ export function ClothDemo2() {
         }
       }
 
-      // ── Dissolve trigger (40% segs rotti) ─────────────────────────────
+      // ── Dissolve trigger ──────────────────────────────────────────────
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.25) {
+        const phase2Elapsed = el - (T_SETTLE + T_ATTRACT);
+        if (broken / segs.length >= 0.08 || phase2Elapsed > 12) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
@@ -329,6 +330,19 @@ export function ClothDemo2() {
             p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 1.5;
           }
         }
+      }
+
+      // DEBUG HUD
+      {
+        let broken = 0;
+        for (const s of segs) if (!s.on) broken++;
+        const phase2Elapsed = el - (T_SETTLE + T_ATTRACT);
+        ctx.fillStyle = "rgba(11,13,20,0.7)";
+        ctx.fillRect(8, 8, 280, 50);
+        ctx.fillStyle = "#0f0";
+        ctx.font = "11px monospace";
+        ctx.fillText(`ph:${phase} torn:${(broken/segs.length*100).toFixed(1)}% p2t:${phase2Elapsed.toFixed(1)}s dT:${dissolveT.toFixed(2)} dX:${dissolveTriggered}`, 14, 28);
+        ctx.fillText(`segs:${segs.length} rdy:${ready} exp:${dissolveExploding}`, 14, 46);
       }
 
       render(false);
