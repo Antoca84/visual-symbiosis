@@ -179,26 +179,26 @@ export function ClothDemo2() {
             if (p.pinned) continue;
             const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
             const olen = Math.hypot(odx, ody) + 0.5;
-            p.px -= (odx / olen) * 5.0 + (Math.random() - 0.5) * 2.5;
-            p.py -= (ody / olen) * 4.0 + (Math.random() - 0.5) * 2.5;
-            p.heat = Math.min(1, p.heat + 0.025);
+            p.px -= (odx / olen) * 2.5 + (Math.random() - 0.5) * 1.2;
+            p.py -= (ody / olen) * 2.0 + (Math.random() - 0.5) * 1.2;
+            p.heat = Math.min(1, p.heat + 0.015);
           }
         } else {
           // Pre-wave + slacken
           for (const p of pts) {
             if (p.pinned) continue;
             if (dissolveT < p.dissolveDelay) {
-              // Pre-wave: vibrazione noise
-              const nx = (Math.sin(p.ix * 13.7 + dissolveT * 5.1) - 0.5) * 1.2;
-              const ny = (Math.sin(p.iy * 19.3 + dissolveT * 4.7 + 2.1) - 0.5) * 1.2;
+              // Pre-wave: vibrazione visibile
+              const nx = (Math.sin(p.ix * 13.7 + dissolveT * 4.2) - 0.5) * 3.5;
+              const ny = (Math.sin(p.iy * 19.3 + dissolveT * 3.8 + 2.1) - 0.5) * 3.5;
               p.x += nx; p.y += ny;
             } else {
-              // Slacken: deriva lenta outward (identico HeroGridNebula outF=0.0028 scalato px)
+              // Slacken: deriva lenta outward
               const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
               const olen = Math.hypot(odx, ody) + 0.5;
-              p.x += (odx / olen) * 0.9;
-              p.y += (ody / olen) * 0.9;
-              p.heat = Math.min(1, p.heat + 0.008);
+              p.x += (odx / olen) * 0.28;
+              p.y += (ody / olen) * 0.28;
+              p.heat = Math.min(1, p.heat + 0.004);
             }
           }
         }
@@ -218,7 +218,7 @@ export function ClothDemo2() {
         for (const p of pts) {
           if (p.pinned) continue;
           unpinned++;
-          if (Math.hypot(p.x - p.ix, p.y - p.iy) > 60) dissolvedCount++;
+          if (Math.hypot(p.x - p.ix, p.y - p.iy) > 90) dissolvedCount++;
         }
         const dissolveRatio = dissolvedCount / (unpinned || 1);
 
@@ -229,9 +229,9 @@ export function ClothDemo2() {
             if (p.pinned) continue;
             const odx = p.x - dissolveOriginX, ody = p.y - dissolveOriginY;
             const olen = Math.hypot(odx, ody) + 0.5;
-            const str = 5.0 + Math.random() * 4.0;
-            p.px -= (odx / olen) * str + (Math.random() - 0.5) * 3;
-            p.py -= (ody / olen) * str + (Math.random() - 0.5) * 3;
+            const str = 3.0 + Math.random() * 2.5;
+            p.px -= (odx / olen) * str + (Math.random() - 0.5) * 1.5;
+            p.py -= (ody / olen) * str + (Math.random() - 0.5) * 1.5;
           }
         }
 
@@ -333,7 +333,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.10) {
+        if (broken / segs.length >= 0.25) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
@@ -347,7 +347,7 @@ export function ClothDemo2() {
           for (const p of pts) {
             // ix/iy = posizione CORRENTE al trigger (non griglia iniziale)
             p.ix = p.x; p.iy = p.y;
-            p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 0.9;
+            p.dissolveDelay = Math.hypot(p.x - dissolveOriginX, p.y - dissolveOriginY) / maxDist * 1.5;
           }
         }
       }
