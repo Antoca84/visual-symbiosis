@@ -287,7 +287,7 @@ export function ClothDemo2() {
           if (dist > tear) { s.on = false; continue; }
           if (down) {
             const cmx = (pa.x + pb.x) * 0.5, cmy = (pa.y + pb.y) * 0.5;
-            if (Math.hypot(cmx - mx, cmy - my) < 55) s.on = false;
+            if (Math.hypot(cmx - mx, cmy - my) < 18) s.on = false;
           }
         }
       }
@@ -313,7 +313,7 @@ export function ClothDemo2() {
       if (phase === 2 && ready && !dissolveTriggered) {
         let broken = 0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken / segs.length >= 0.08) {
+        if (broken / segs.length >= 0.30) {
           dissolveTriggered = true;
           dissolveT = 0;
           // Centroide nodi caldi
