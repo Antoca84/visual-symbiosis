@@ -17,7 +17,7 @@ function fbm2(x: number, y: number, o = 3): number {
 
 // ── Cloth constants ───────────────────────────────────────────────────────────
 const COLS = 60, ROWS = 28;
-const GRAVITY = 0.12, DAMPING = 0.985, ITER = 6;
+const GRAVITY = 0.132, DAMPING = 0.985, ITER = 6;
 const MOUSE_R = 90, TEAR_MULT = 2.5;
 const T_CLOUD = 1.4;   // durata nube float
 const T_LETTER = 2.6;  // durata convergenza lettere
