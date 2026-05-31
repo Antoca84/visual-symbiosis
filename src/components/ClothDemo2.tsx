@@ -208,34 +208,40 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     let W = 0, H = 0, mouseR = MOUSE_R;
     let tAnim = 0;
 
-    // ── Water offscreen ───────────────────────────────────────────────────
+    // ── Water: bake statico una volta, pan lento ogni frame (zero noise/frame) ─
     const WW = 240, WH = 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
-    const wCtx = wCanvas.getContext("2d")!, wData = wCtx.createImageData(WW, WH);
+    const wCtx = wCanvas.getContext("2d")!;
 
-    let waterFrameSkip = 0;
+    function bakeWater() {
+      const wData = wCtx.createImageData(WW, WH);
+      const d = wData.data;
+      for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
+        const nx=px/WW*3.2, ny=py/WH*1.8;
+        const w1=fbm2(nx+0.5, ny+0.5, 3);
+        const w2=fbm2(nx*0.55+4.1, ny*0.75+2.3, 3);
+        const sh=Math.max(0,vnoise2(nx*2.1,ny*2.3+6.1)-0.62)*2.8;
+        const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
+        let r:number,g:number,b:number;
+        if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
+        else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
+        const idx=(py*WW+px)*4;
+        d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
+      }
+      wCtx.putImageData(wData,0,0);
+    }
+
     function drawWater(alpha: number) {
       if (alpha <= 0.01) return;
-      // Ricalcola texture solo ogni 3 frame (la water si muove lentamente)
-      if (++waterFrameSkip % 3 === 1) {
-        const d = wData.data, t = tAnim;
-        for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
-          const nx=px/WW*3.2,ny=py/WH*1.8;
-          const w1=fbm2(nx+t*0.055,ny+0.5+t*0.038,2);
-          const w2=fbm2(nx*0.55+4.1-t*0.041,ny*0.75+2.3+t*0.049,2);
-          const sh=Math.max(0,vnoise2(nx*2.1+t*0.09,ny*2.3+6.1-t*0.07)-0.62)*2.8;
-          const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
-          let r:number,g:number,b:number;
-          if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
-          else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
-          const idx=(py*WW+px)*4;
-          d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
-        }
-        wCtx.putImageData(wData,0,0);
-      }
+      // Pan lento che simula il drift originale (tAnim*~4px/sec in texture-space)
+      const ox = -((tAnim * 4.125) % WW) / WW * W;
+      const oy = -((tAnim * 2.85)  % WH) / WH * H;
       ctx.globalAlpha=alpha; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-      ctx.drawImage(wCanvas,0,0,W,H);
+      ctx.drawImage(wCanvas, ox,     oy,     W, H);
+      ctx.drawImage(wCanvas, ox + W, oy,     W, H);
+      ctx.drawImage(wCanvas, ox,     oy + H, W, H);
+      ctx.drawImage(wCanvas, ox + W, oy + H, W, H);
       ctx.globalAlpha=1; ctx.imageSmoothingEnabled=false;
     }
 
@@ -283,6 +289,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
+      bakeWater();
       cachedGd = ctx.createLinearGradient(0, H*0.65, 0, H);
       cachedGd.addColorStop(0, "rgba(0,0,0,0)"); cachedGd.addColorStop(1, "rgba(11,13,20,1)");
       cachedVig = ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
