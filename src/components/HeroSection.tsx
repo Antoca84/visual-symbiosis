@@ -1,17 +1,15 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
-import { HeroGridNebula } from "@/components/HeroGridNebula";
+import { ClothDemo2 } from "@/components/ClothDemo2";
 
 const HeroSection = () => {
   const sectionRef = useRef<HTMLElement>(null);
-  
-  // Track scroll progress within the hero section
+
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ["start start", "end start"]
   });
 
-  // Title fades out as user scrolls past hero
   const textOpacity = useTransform(scrollYProgress, [0.45, 0.85], [1, 0]);
 
   return (
@@ -19,11 +17,9 @@ const HeroSection = () => {
       ref={sectionRef}
       className="relative h-svh md:h-screen w-full overflow-hidden flex items-center md:items-end md:pb-24"
     >
-      {/* Nebula → grid assembly canvas */}
-      <HeroGridNebula scrollYProgress={scrollYProgress} />
+      <ClothDemo2 showHud={false} />
 
-      {/* Studio name with subtle cinematic focus-based reveal */}
-      <div className="relative z-10 px-6 md:px-12 w-full">
+      <div className="relative z-10 px-6 md:px-12 w-full pointer-events-none">
         <div className="border-l border-foreground/20 pl-4 md:pl-6 inline-block mb-3 md:mb-4">
           <span className="text-[9px] tracking-[0.35em] uppercase text-foreground/25">
             Visual Laboratory
@@ -33,11 +29,7 @@ const HeroSection = () => {
           className="font-serif text-5xl md:text-7xl lg:text-[8rem] xl:text-[10rem] leading-[0.85] tracking-[0.04em] text-foreground"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{
-            duration: 1.0,
-            delay: 3.0,
-            ease: [0.25, 0.1, 0.25, 1],
-          }}
+          transition={{ duration: 1.0, delay: 3.0, ease: [0.25, 0.1, 0.25, 1] }}
           style={{ opacity: textOpacity }}
         >
           Industrial

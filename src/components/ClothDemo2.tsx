@@ -191,7 +191,7 @@ function SliderRow({ label, value, min, max, step, onChange, unit = "" }: {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ClothDemo2() {
+export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
   const mou = useRef({ x: -9999, y: -9999, down: false });
   const raf = useRef<number>(0);
@@ -659,7 +659,7 @@ export function ClothDemo2() {
     <>
       <canvas ref={cvs} className="absolute inset-0 w-full h-full block cursor-none"
         style={{ touchAction: "none" }} />
-      <div className="fixed top-4 right-4 z-[100] pointer-events-auto select-none font-mono">
+      {showHud && <div className="fixed top-4 right-4 z-[100] pointer-events-auto select-none font-mono">
         <button onClick={() => setHudOpen(v => !v)}
           className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/60
             border border-white/10 hover:border-white/20 px-4 py-3 backdrop-blur-sm
@@ -691,7 +691,7 @@ export function ClothDemo2() {
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </>
   );
 }
