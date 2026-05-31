@@ -17,8 +17,8 @@ function fbm2(x: number, y: number, o = 3): number {
 
 // ── Cloth constants ───────────────────────────────────────────────────────────
 const COLS = 60, ROWS = 28;
-const GRAVITY = 0.22, DAMPING = 0.985, ITER = 6;
-const MOUSE_R = 90, TEAR_MULT = 1.5;
+const GRAVITY = 0.12, DAMPING = 0.985, ITER = 6;
+const MOUSE_R = 90, TEAR_MULT = 2.5;
 const T_CLOUD = 1.4;   // durata nube float
 const T_LETTER = 2.6;  // durata convergenza lettere
 
@@ -222,10 +222,12 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         const w1=fbm2(nx+0.5, ny+0.5, 3);
         const w2=fbm2(nx*0.55+4.1, ny*0.75+2.3, 3);
         const sh=Math.max(0,vnoise2(nx*2.1,ny*2.3+6.1)-0.62)*2.8;
-        const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
+        // Remap h per aumentare contrasto: stretch 0.3-0.7 → 0-1
+        const hRaw=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
+        const h=Math.max(0,Math.min(1,(hRaw-0.3)/0.4));
         let r:number,g:number,b:number;
-        if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
-        else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
+        if(h<0.5){const f=h*2;r=Math.round(8+50*f);g=Math.round(22+90*f);b=Math.round(55+120*f);}
+        else{const f=(h-0.5)*2;r=Math.round(58+80*f+sh*80);g=Math.round(112+100*f+sh*90);b=Math.round(175+60*f+sh*60);}
         const idx=(py*WW+px)*4;
         d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
       }
@@ -342,7 +344,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
 
       if (phase === 2 && phase2StartT < 0) phase2StartT = ts;
       const phase2Age      = phase2StartT >= 0 ? (ts - phase2StartT) / 1000 : 0;
-      const constraintRamp = phase === 2 ? Math.min(1, phase2Age / 1.5) : 0;
+      const constraintRamp = phase === 2 ? Math.min(1, phase2Age / 2.5) : 0;
 
       const idleMs  = phase === 2 && !dissolveTriggered ? Math.max(0, ts - lastMouseT - 2000) : 0;
       const waveAmp = Math.min(1, idleMs / 2000);
@@ -512,7 +514,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
 
       const gridAge    = gridEntryT>=0?(ts-gridEntryT)/1000:0;
       const clearAlpha = phase===0?0.65:phase===1?0.70:0.72+0.23*Math.min(1,gridAge/1.5);
-      const waterAlpha = phase<2?0:0.18;
+      const waterAlpha = phase<2?0:0.28;
 
       render(clearAlpha, false, waterAlpha);
     }
