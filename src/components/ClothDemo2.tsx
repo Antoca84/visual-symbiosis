@@ -22,6 +22,15 @@ const MOUSE_R = 90, TEAR_MULT = 2.5;
 const T_CLOUD = 1.4;   // durata nube float
 const T_LETTER = 2.6;  // durata convergenza lettere
 
+// ── Thanos dissolve ───────────────────────────────────────────────────────────
+const SWEEP_DUR = 1.6; // secondi per sweep left→right
+interface DustParticle {
+  x: number; y: number;
+  vx: number; vy: number;
+  activateAt: number; maxLife: number;
+  r: number; g: number; b: number; size: number;
+}
+
 // ── Particle cloud (sistema indipendente) ─────────────────────────────────────
 const N_PART = 2000;
 interface Part {
@@ -247,6 +256,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
 
     let dissolveTriggered = false, dissolveExploding = false;
     let dissolveOriginX = 0, dissolveOriginY = 0, dissolveT = 0;
+    let dustParticles: DustParticle[] = [];
     let gridEntryT = -1, phase2StartT = -1;
     let lastMouseT = -99999;
     let curPhase = 0, curAt = 0, curWaveAmp = 0;
@@ -340,30 +350,19 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       const waveAmp = Math.min(1, idleMs / 2000);
       curPhase = phase; curAt = at; curWaveAmp = waveAmp;
 
-      // ── Dissolve cloth ──────────────────────────────────────────────────
+      // ── Dissolve cloth: Thanos sweep left→right ─────────────────────────
       if (dissolveTriggered) {
         dissolveT += dt;
-        // Impulso una tantum al primo frame — staggered per dissolveDelay
-        if (!dissolveExploding) {
-          dissolveExploding = true;
-          for (const p of pts) {
-            if (p.pinned) continue;
-            const odx=p.x-dissolveOriginX, ody=p.y-dissolveOriginY;
-            const olen=Math.hypot(odx,ody)+0.5;
-            const str=(0.8+Math.random()*1.0)*(0.4+p.dissolveDelay*1.5);
-            p.px=p.x-(odx/olen)*str;   // velocità outward
-            p.py=p.y-(ody/olen)*str;
-            p.heat=Math.min(1,p.heat+0.3);
-          }
+        // Aggiorna dust particles (no Verlet — cloth frozen)
+        for (const dp of dustParticles) {
+          if (dissolveT < dp.activateAt) continue;
+          dp.vy += 0.06;
+          dp.vx *= 0.984; dp.vy *= 0.984;
+          dp.x += dp.vx; dp.y += dp.vy;
         }
-        // Verlet normale + gravity — pezzi cadono naturalmente
-        for (const p of pts) {
-          if (p.pinned) continue;
-          const vx=(p.x-p.px)*DAMPING, vy=(p.y-p.py)*DAMPING;
-          p.px=p.x; p.py=p.y; p.x+=vx; p.y+=vy+GRAVITY; p.heat*=0.97;
-        }
-        if (dissolveT >= 2.5) reconstruct(lastTs);
-        render(0.055, true, 0.10);
+        const sweepX = (dissolveT / SWEEP_DUR) * W;
+        if (dissolveT > SWEEP_DUR + 1.4) { reconstruct(lastTs); return; }
+        renderThanos(sweepX);
         return;
       }
 
@@ -474,15 +473,30 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         let broken=0;
         for (const s of segs) if (!s.on) broken++;
         if (broken/segs.length>=0.45) {
-          dissolveTriggered=true; dissolveT=0;
-          let hcx=0,hcy=0,hc=0;
-          for (const p of pts) { if(!p.pinned&&p.heat>0.2){hcx+=p.x;hcy+=p.y;hc++;} }
-          dissolveOriginX=hc>0?hcx/hc:W*0.5;
-          dissolveOriginY=hc>0?hcy/hc:H*0.45;
-          const maxD=Math.hypot(W,H);
-          for (const p of pts) {
-            p.px=p.x;p.py=p.y;p.ix=p.x;p.iy=p.y;
-            p.dissolveDelay=Math.hypot(p.x-dissolveOriginX,p.y-dissolveOriginY)/maxD*1.5;
+          dissolveTriggered=true; dissolveT=0; dissolveExploding=false;
+          // Genera dust particles da ogni segmento — sweep left→right
+          dustParticles = [];
+          for (const s of segs) {
+            if (!s.on) continue;
+            const pa=pts[s.a],pb=pts[s.b];
+            const mx=(pa.x+pb.x)*0.5, my=(pa.y+pb.y)*0.5;
+            const h=Math.max(s.ten,(pa.heat+pb.heat)*0.5);
+            let r:number,g:number,b:number;
+            if(h>0.72){const f=(h-0.72)/0.28;r=255;g=Math.round(210+(255-210)*f);b=Math.round(255*f);}
+            else if(h>0.38){const f=(h-0.38)/0.34;r=230;g=Math.round(40+(210-40)*f);b=0;}
+            else if(h>0.12){const f=(h-0.12)/0.26;r=Math.round(90+(230-90)*f);g=Math.round(185*(1-f));b=Math.round(255*(1-f));}
+            else{r=90;g=185;b=255;}
+            const activateAt=(mx/W)*SWEEP_DUR;
+            for (let i=0;i<5;i++) {
+              const ang=(Math.random()-0.5)*Math.PI*0.7;
+              const spd=0.6+Math.random()*2.0;
+              dustParticles.push({
+                x:mx+(Math.random()-0.5)*10, y:my+(Math.random()-0.5)*10,
+                vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd*0.4-0.4,
+                activateAt, maxLife:0.5+Math.random()*0.9,
+                r,g,b, size:0.5+Math.random()*1.6,
+              });
+            }
           }
         }
 
@@ -670,6 +684,69 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       }
 
       // Gradiente + vignette (cached — riallocati solo su resize)
+      if (cachedGd) { ctx.fillStyle=cachedGd; ctx.fillRect(0,0,W,H); }
+      if (cachedVig) { ctx.fillStyle=cachedVig; ctx.fillRect(0,0,W,H); }
+    }
+
+    function renderThanos(sweepX: number) {
+      const { brightness } = hudRef.current;
+      ctx.fillStyle='rgba(11,13,20,0.50)';
+      ctx.fillRect(0,0,W,H);
+      drawWater(0.10);
+      ctx.lineCap='round';
+
+      // Cloth frozen — mostra solo segmenti a DESTRA dello sweep (non ancora disintegrati)
+      // Fade morbido al bordo sweep (±60px)
+      const EDGE = 60;
+      ctx.beginPath();
+      for (const s of segs) {
+        if (!s.on) continue;
+        const mx=(pts[s.a].x+pts[s.b].x)*0.5;
+        if (mx <= sweepX - EDGE) continue;
+        ctx.moveTo(pts[s.a].x,pts[s.a].y); ctx.lineTo(pts[s.b].x,pts[s.b].y);
+      }
+      ctx.strokeStyle=`rgba(60,150,255,${(0.06*brightness).toFixed(3)})`;
+      ctx.lineWidth=9; ctx.stroke();
+
+      ctx.beginPath();
+      for (const s of segs) {
+        if (!s.on) continue;
+        const mx=(pts[s.a].x+pts[s.b].x)*0.5;
+        if (mx <= sweepX - EDGE) continue;
+        ctx.moveTo(pts[s.a].x,pts[s.a].y); ctx.lineTo(pts[s.b].x,pts[s.b].y);
+      }
+      ctx.strokeStyle=`rgba(90,180,255,${(0.12*brightness).toFixed(3)})`;
+      ctx.lineWidth=3; ctx.stroke();
+
+      // Main cloth — con fade al bordo sweep
+      for (const s of segs) {
+        if (!s.on) continue;
+        const mx=(pts[s.a].x+pts[s.b].x)*0.5;
+        const edgeFade=Math.min(1,Math.max(0,(mx-sweepX+EDGE)/EDGE));
+        if (edgeFade < 0.02) continue;
+        const h=Math.max(s.ten,(pts[s.a].heat+pts[s.b].heat)*0.5);
+        let r:number,g:number,b:number;
+        if(h>0.72){const f=(h-0.72)/0.28;r=255;g=Math.round(210+(255-210)*f);b=Math.round(255*f);}
+        else if(h>0.38){const f=(h-0.38)/0.34;r=230;g=Math.round(40+(210-40)*f);b=0;}
+        else if(h>0.12){const f=(h-0.12)/0.26;r=Math.round(90+(230-90)*f);g=Math.round(185*(1-f));b=Math.round(255*(1-f));}
+        else{r=90;g=185;b=255;}
+        const alpha=(0.744)*edgeFade*brightness;
+        ctx.beginPath(); ctx.moveTo(pts[s.a].x,pts[s.a].y); ctx.lineTo(pts[s.b].x,pts[s.b].y);
+        ctx.strokeStyle=`rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+        ctx.lineWidth=0.55+h*1.9; ctx.stroke();
+      }
+
+      // Dust particles
+      for (const dp of dustParticles) {
+        if (dissolveT < dp.activateAt) continue;
+        const age=dissolveT-dp.activateAt;
+        const lt=age/dp.maxLife; if(lt>=1) continue;
+        const alpha=(lt<0.15?lt/0.15:(1-lt))*0.9*brightness;
+        if (alpha<0.01) continue;
+        ctx.fillStyle=`rgba(${dp.r},${dp.g},${dp.b},${alpha.toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(dp.x,dp.y,dp.size,0,Math.PI*2); ctx.fill();
+      }
+
       if (cachedGd) { ctx.fillStyle=cachedGd; ctx.fillRect(0,0,W,H); }
       if (cachedVig) { ctx.fillStyle=cachedVig; ctx.fillRect(0,0,W,H); }
     }
