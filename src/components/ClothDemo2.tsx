@@ -155,9 +155,9 @@ async function sampleLetters(
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
-const HUD_KEY = "lab2-hud-v5";
-interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; particleGlow: number; trailAlpha: number; trailMult: number; }
-const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 1.0, trailAlpha: 0.6, trailMult: 2.5 };
+const HUD_KEY = "lab2-hud-v6";
+interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; particleGlow: number; trailAlpha: number; trailMult: number; offsetX: number; offsetY: number; }
+const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 1.0, trailAlpha: 0.6, trailMult: 2.5, offsetX: 0, offsetY: 0 };
 function loadHud(): HudVals {
   try { const s = localStorage.getItem(HUD_KEY); return s ? { ...HUD_DEF, ...JSON.parse(s) } : HUD_DEF; }
   catch { return HUD_DEF; }
@@ -383,11 +383,13 @@ export function ClothDemo2() {
             // Lettera: convergenza staggered — tutte le particelle verso target
             const localT = Math.max(0, (at - p.delay) / Math.max(0.01, 1 - p.delay));
             if (localT > 0) {
-              const dx = p.lx - p.x, dy = p.ly - p.y;
+              const { offsetX, offsetY } = hudRef.current;
+              const tx = p.lx + offsetX, ty = p.ly + offsetY;
+              const dx = tx - p.x, dy = ty - p.y;
               const dist = Math.hypot(dx, dy);
               if (dist < 1.5 && localT > 0.5) {
                 // Snap finale
-                p.x = p.lx; p.y = p.ly; p.vx = 0; p.vy = 0;
+                p.x = tx; p.y = ty; p.vx = 0; p.vy = 0;
               } else {
                 const t2 = localT * localT;
                 p.vx += dx * t2 * 0.26;
@@ -670,6 +672,10 @@ export function ClothDemo2() {
             <SliderRow label="Glow ×"     value={hud.particleGlow}  min={0}   max={3.0} step={0.05} onChange={v=>updateHud("particleGlow",v)} />
             <SliderRow label="Trail α"    value={hud.trailAlpha}    min={0}   max={3.0} step={0.05} onChange={v=>updateHud("trailAlpha",v)} />
             <SliderRow label="Trail ×"    value={hud.trailMult}     min={0.5} max={8.0} step={0.1}  onChange={v=>updateHud("trailMult",v)} />
+            <div className="my-4 border-t border-white/10" />
+            <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Text Align</p>
+            <SliderRow label="Offset X"   value={hud.offsetX}       min={-60} max={60}  step={0.5}  onChange={v=>updateHud("offsetX",v)} unit="px" />
+            <SliderRow label="Offset Y"   value={hud.offsetY}       min={-60} max={60}  step={0.5}  onChange={v=>updateHud("offsetY",v)} unit="px" />
             <div className="my-4 border-t border-white/10" />
             <p className="text-[8px] tracking-[0.35em] uppercase text-white/25 mb-4">Color</p>
             <SliderRow label="Brightness" value={hud.brightness}    min={0.3} max={1.5} step={0.01} onChange={v=>updateHud("brightness",v)} />
