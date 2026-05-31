@@ -354,7 +354,28 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       // ── Dissolve cloth: Thanos sweep left→right ─────────────────────────
       if (dissolveTriggered) {
         dissolveT += dt;
-        // Aggiorna dust particles (no Verlet — cloth frozen)
+
+        // Verlet continua live durante dissolve (cloth ancora fisico)
+        for (const p of pts) {
+          if (p.pinned) continue;
+          const vx=(p.x-p.px)*DAMPING, vy=(p.y-p.py)*DAMPING;
+          p.px=p.x; p.py=p.y; p.x+=vx; p.y+=vy+GRAVITY; p.heat*=0.97;
+        }
+        for (let it=0;it<ITER;it++) {
+          for (const s of segs) {
+            if (!s.on) continue;
+            const pa=pts[s.a],pb=pts[s.b];
+            const ddx=pa.x-pb.x,ddy=pa.y-pb.y;
+            const dist=Math.sqrt(ddx*ddx+ddy*ddy)||0.001;
+            if (dist>s.rest*TEAR_MULT){s.on=false;continue;}
+            const diff=(dist-s.rest)/dist*0.5;
+            const ox=ddx*diff,oy=ddy*diff;
+            if(!pa.pinned){pa.x-=ox;pa.y-=oy;}
+            if(!pb.pinned){pb.x+=ox;pb.y+=oy;}
+          }
+        }
+
+        // Aggiorna dust particles
         for (const dp of dustParticles) {
           if (dissolveT < dp.activateAt) continue;
           dp.vy += 0.06;
@@ -473,7 +494,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         // Dissolve trigger
         let broken=0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken/segs.length>=0.75) {
+        if (broken/segs.length>=0.65) {
           dissolveTriggered=true; dissolveT=0; dissolveExploding=false;
           // Origine random del sweep radiale
           dissolveOriginX = W * (0.2 + Math.random() * 0.6);
