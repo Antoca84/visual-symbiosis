@@ -208,42 +208,33 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     let W = 0, H = 0, mouseR = MOUSE_R;
     let tAnim = 0;
 
-    // ── Water: bake statico una volta, pan lento ogni frame (zero noise/frame) ─
+    // ── Water animata con throttle 3 frame ───────────────────────────────────
     const WW = 240, WH = 135;
     const wCanvas = document.createElement("canvas");
     wCanvas.width = WW; wCanvas.height = WH;
-    const wCtx = wCanvas.getContext("2d")!;
+    const wCtx = wCanvas.getContext("2d")!, wData = wCtx.createImageData(WW, WH);
 
-    function bakeWater() {
-      const wData = wCtx.createImageData(WW, WH);
-      const d = wData.data;
-      for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
-        const nx=px/WW*3.2, ny=py/WH*1.8;
-        const w1=fbm2(nx+0.5, ny+0.5, 3);
-        const w2=fbm2(nx*0.55+4.1, ny*0.75+2.3, 3);
-        const sh=Math.max(0,vnoise2(nx*2.1,ny*2.3+6.1)-0.62)*2.8;
-        // Remap h per aumentare contrasto: stretch 0.3-0.7 → 0-1
-        const hRaw=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
-        const h=Math.max(0,Math.min(1,(hRaw-0.3)/0.4));
-        let r:number,g:number,b:number;
-        if(h<0.5){const f=h*2;r=Math.round(8+50*f);g=Math.round(22+90*f);b=Math.round(55+120*f);}
-        else{const f=(h-0.5)*2;r=Math.round(58+80*f+sh*80);g=Math.round(112+100*f+sh*90);b=Math.round(175+60*f+sh*60);}
-        const idx=(py*WW+px)*4;
-        d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
-      }
-      wCtx.putImageData(wData,0,0);
-    }
-
+    let waterFrameSkip = 0;
     function drawWater(alpha: number) {
       if (alpha <= 0.01) return;
-      // Pan lento che simula il drift originale (tAnim*~4px/sec in texture-space)
-      const ox = -((tAnim * 4.125) % WW) / WW * W;
-      const oy = -((tAnim * 2.85)  % WH) / WH * H;
+      if (++waterFrameSkip % 3 === 1) {
+        const d = wData.data, t = tAnim;
+        for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
+          const nx=px/WW*3.2, ny=py/WH*1.8;
+          const w1=fbm2(nx+t*0.055, ny+0.5+t*0.038, 3);
+          const w2=fbm2(nx*0.55+4.1-t*0.041, ny*0.75+2.3+t*0.049, 3);
+          const sh=Math.max(0,vnoise2(nx*2.1+t*0.09, ny*2.3+6.1-t*0.07)-0.62)*2.8;
+          const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
+          let r:number,g:number,b:number;
+          if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
+          else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
+          const idx=(py*WW+px)*4;
+          d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
+        }
+        wCtx.putImageData(wData,0,0);
+      }
       ctx.globalAlpha=alpha; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-      ctx.drawImage(wCanvas, ox,     oy,     W, H);
-      ctx.drawImage(wCanvas, ox + W, oy,     W, H);
-      ctx.drawImage(wCanvas, ox,     oy + H, W, H);
-      ctx.drawImage(wCanvas, ox + W, oy + H, W, H);
+      ctx.drawImage(wCanvas,0,0,W,H);
       ctx.globalAlpha=1; ctx.imageSmoothingEnabled=false;
     }
 
@@ -291,7 +282,6 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
-      bakeWater();
       cachedGd = ctx.createLinearGradient(0, H*0.65, 0, H);
       cachedGd.addColorStop(0, "rgba(0,0,0,0)"); cachedGd.addColorStop(1, "rgba(11,13,20,1)");
       cachedVig = ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
@@ -357,12 +347,12 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           for (const p of pts) {
             if (p.pinned) continue;
             if (dissolveT < p.dissolveDelay) {
-              p.x += (Math.sin(p.ix*13.7+dissolveT*4.2)-0.5)*3.5;
-              p.y += (Math.sin(p.iy*19.3+dissolveT*3.8+2.1)-0.5)*3.5;
+              p.x += (Math.sin(p.ix*13.7+dissolveT*4.2)-0.5)*1.2;
+              p.y += (Math.sin(p.iy*19.3+dissolveT*3.8+2.1)-0.5)*1.2;
             } else {
               const odx=p.x-dissolveOriginX,ody=p.y-dissolveOriginY;
               const olen=Math.hypot(odx,ody)+0.5;
-              p.x+=(odx/olen)*0.55; p.y+=(ody/olen)*0.55;
+              p.x+=(odx/olen)*0.2; p.y+=(ody/olen)*0.2;
               p.heat=Math.min(1,p.heat+0.005);
             }
           }
@@ -372,18 +362,18 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           const vx=(p.x-p.px)*DAMPING,vy=(p.y-p.py)*DAMPING;
           p.px=p.x; p.py=p.y; p.x+=vx; p.y+=vy; p.heat*=0.985;
         }
-        if (!dissolveExploding && dissolveT >= 2.2) {
+        if (!dissolveExploding && dissolveT >= 1.4) {
           dissolveExploding = true;
           for (const p of pts) {
             if (p.pinned) continue;
             const odx=p.x-dissolveOriginX,ody=p.y-dissolveOriginY;
             const olen=Math.hypot(odx,ody)+0.5;
-            const str=4.5+Math.random()*3.0;
-            p.px-=(odx/olen)*str+(Math.random()-0.5)*2;
-            p.py-=(ody/olen)*str+(Math.random()-0.5)*2;
+            const str=1.2+Math.random()*0.8;
+            p.px-=(odx/olen)*str+(Math.random()-0.5)*1.0;
+            p.py-=(ody/olen)*str+(Math.random()-0.5)*1.0;
           }
         }
-        if (dissolveExploding && dissolveT >= 6.0) reconstruct(lastTs);
+        if (dissolveExploding && dissolveT >= 3.2) reconstruct(lastTs);
         render(0.055, true, 0.10);
         return;
       }
