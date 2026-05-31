@@ -114,29 +114,31 @@ async function sampleLetters(
   const fontStyle  = cs.fontStyle  || "normal";
   const ls         = parseFloat(cs.letterSpacing) || 0;
   const fontSize   = parseFloat(cs.fontSize) || 80;
-  // lineHeight calcolata: con leading-[0.85] è 0.85*fontSize
-  const rawLH   = parseFloat(cs.lineHeight);
-  const lineH   = isNaN(rawLH) ? fontSize * 0.85 : rawLH;
-  // Con lineHeight < fontSize (negative leading) il box CSS inizia sotto il top dei glyph.
-  // halfLeading < 0 → ink top = h1Rect.top + halfLeading (sopra il box)
+  const rawLH      = parseFloat(cs.lineHeight);
+  const lineH      = isNaN(rawLH) ? fontSize * 0.85 : rawLH;
   const halfLeading = (lineH - fontSize) / 2;
 
   const cvRect  = canvas.getBoundingClientRect();
   const h1Rect  = h1El.getBoundingClientRect();
   const padLeft = h1Rect.left - cvRect.left;
 
+  // Offscreen canvas a DPR reale: stessa risoluzione fisica del main canvas.
+  // Su Retina (DPR=2) il browser usa subpixel hinting; senza DPR il campionamento
+  // diverge dal rendering CSS di qualche px. Dividendo le posizioni campionate per dpr
+  // si ottengono coordinate CSS pixel identiche a quelle del main canvas.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const PW = Math.round(W * dpr), PH = Math.round(H * dpr);
   const oc = document.createElement("canvas");
-  oc.width = W; oc.height = H;
+  oc.width = PW; oc.height = PH;
   const ox = oc.getContext("2d")!;
+  ox.setTransform(dpr, 0, 0, dpr, 0, 0);          // coordinate CSS pixel
   ox.font = `${fontStyle} ${fontSize}px ${fontFamily}`;
   ox.textAlign = "left"; ox.textBaseline = "alphabetic";
   if ("letterSpacing" in ox)
     (ox as unknown as Record<string,string>).letterSpacing =
       `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
 
-  // CSS usa lo stesso ascender tipografico per tutte le righe.
-  // Misura su "Hd": capital + lowercase ascender → cattura l'ascender reale del font.
-  // NON usare per-stringa: "Magic" ha solo cap height → baseline troppo alta.
+  // Stesso ascender tipografico per entrambe le righe (come fa CSS)
   const typAscender = ox.measureText("Hd").actualBoundingBoxAscent;
   const baseline1   = h1Rect.top - cvRect.top + halfLeading + typAscender;
   const baseline2   = baseline1 + lineH;
@@ -145,12 +147,15 @@ async function sampleLetters(
   ox.fillText("Industrial", padLeft, baseline1);
   ox.fillText("Magic",      padLeft, baseline2);
 
-  const d = ox.getImageData(0, 0, W, H).data;
+  // Campiona in coordinate fisiche (PW×PH), converte in CSS pixel (÷dpr)
+  const d    = ox.getImageData(0, 0, PW, PH).data;
   const out: { x: number; y: number }[] = [];
-  const step = 4;
-  for (let y = 0; y < H; y += step)
-    for (let x = 0; x < W; x += step)
-      if (d[(y * W + x) * 4 + 3] > 100) out.push({ x, y });
+  const step = 4;                              // step in CSS pixel
+  const ps   = Math.round(step * dpr);         // step in pixel fisici
+  for (let py = 0; py < PH; py += ps)
+    for (let px = 0; px < PW; px += ps)
+      if (d[(py * PW + px) * 4 + 3] > 100)
+        out.push({ x: px / dpr, y: py / dpr });
   return out;
 }
 
