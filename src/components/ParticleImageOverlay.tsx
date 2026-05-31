@@ -13,11 +13,12 @@ interface Particle {
 interface Props { imageSrc: string; }
 
 export function ParticleImageOverlay({ imageSrc }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef   = useRef<number>(0);
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const rafRef      = useRef<number>(0);
+  const isVisibleRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current!;
+    const canvas = canvasRef.current!
     const ctx    = canvas.getContext("2d")!;
     let W = 0, H = 0;
 
@@ -34,6 +35,12 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
+
+    const io = new IntersectionObserver(
+      ([entry]) => { isVisibleRef.current = entry.isIntersecting; },
+      { threshold: 0 }
+    );
+    io.observe(canvas);
 
     // ── Luma / color / gradient maps ─────────────────────────────────────────
     let lumaMap: Float32Array | null = null;
@@ -148,6 +155,7 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
     let t = 0;
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
+      if (!isVisibleRef.current) return;
       t += MOB ? 0.0012 : 0.005;
 
       // Fade trails to black
@@ -219,7 +227,7 @@ export function ParticleImageOverlay({ imageSrc }: Props) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); io.disconnect(); };
   }, [imageSrc]);
 
   return (

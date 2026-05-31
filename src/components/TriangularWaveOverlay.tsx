@@ -23,8 +23,9 @@ const fbm = (x: number, y: number) =>
   vnoise(x, y) * 0.65 + vnoise(x * 2.1, y * 2.1) * 0.35;
 
 export function TriangularWaveOverlay({ imageSrc }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef    = useRef<number>(0);
+  const canvasRef    = useRef<HTMLCanvasElement>(null);
+  const rafRef       = useRef<number>(0);
+  const isVisibleRef = useRef<boolean>(false);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -45,6 +46,12 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
+
+    const io = new IntersectionObserver(
+      ([entry]) => { isVisibleRef.current = entry.isIntersecting; },
+      { threshold: 0 }
+    );
+    io.observe(canvas);
 
     const srcR = new Uint8Array(PROC * PROC);
     const srcG = new Uint8Array(PROC * PROC);
@@ -79,6 +86,7 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
 
     const draw = () => {
       rafRef.current = requestAnimationFrame(draw);
+      if (!isVisibleRef.current) return;
       t += 0.016;
 
       if (!ready) return;
@@ -108,7 +116,7 @@ export function TriangularWaveOverlay({ imageSrc }: Props) {
     };
 
     rafRef.current = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); };
+    return () => { cancelAnimationFrame(rafRef.current); ro.disconnect(); io.disconnect(); };
   }, [imageSrc]);
 
   return (
