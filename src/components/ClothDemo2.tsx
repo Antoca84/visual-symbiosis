@@ -16,8 +16,8 @@ function fbm2(x: number, y: number, o = 3): number {
 }
 
 // ── Cloth constants ───────────────────────────────────────────────────────────
-const COLS = 48, ROWS = 22;
-const GRAVITY = 0.22, DAMPING = 0.985, ITER = 4;
+const COLS = 60, ROWS = 28;
+const GRAVITY = 0.22, DAMPING = 0.985, ITER = 6;
 const MOUSE_R = 90, TEAR_MULT = 1.5;
 const T_CLOUD = 1.4;   // durata nube float
 const T_LETTER = 2.6;  // durata convergenza lettere
@@ -214,22 +214,26 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     wCanvas.width = WW; wCanvas.height = WH;
     const wCtx = wCanvas.getContext("2d")!, wData = wCtx.createImageData(WW, WH);
 
+    let waterFrameSkip = 0;
     function drawWater(alpha: number) {
       if (alpha <= 0.01) return;
-      const d = wData.data, t = tAnim;
-      for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
-        const nx=px/WW*3.2,ny=py/WH*1.8;
-        const w1=fbm2(nx+t*0.055,ny+0.5+t*0.038,4);
-        const w2=fbm2(nx*0.55+4.1-t*0.041,ny*0.75+2.3+t*0.049,4);
-        const sh=Math.max(0,vnoise2(nx*2.1+t*0.09,ny*2.3+6.1-t*0.07)-0.62)*2.8;
-        const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
-        let r:number,g:number,b:number;
-        if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
-        else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
-        const idx=(py*WW+px)*4;
-        d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
+      // Ricalcola texture solo ogni 3 frame (la water si muove lentamente)
+      if (++waterFrameSkip % 3 === 1) {
+        const d = wData.data, t = tAnim;
+        for (let py = 0; py < WH; py++) for (let px = 0; px < WW; px++) {
+          const nx=px/WW*3.2,ny=py/WH*1.8;
+          const w1=fbm2(nx+t*0.055,ny+0.5+t*0.038,2);
+          const w2=fbm2(nx*0.55+4.1-t*0.041,ny*0.75+2.3+t*0.049,2);
+          const sh=Math.max(0,vnoise2(nx*2.1+t*0.09,ny*2.3+6.1-t*0.07)-0.62)*2.8;
+          const h=Math.max(0,Math.min(1,w1*0.55+w2*0.45));
+          let r:number,g:number,b:number;
+          if(h<0.5){const f=h*2;r=Math.round(8+32*f);g=Math.round(22+68*f);b=Math.round(55+90*f);}
+          else{const f=(h-0.5)*2;r=Math.round(40+30*f+sh*60);g=Math.round(90+70*f+sh*80);b=Math.round(145+65*f+sh*60);}
+          const idx=(py*WW+px)*4;
+          d[idx]=Math.min(255,r);d[idx+1]=Math.min(255,g);d[idx+2]=Math.min(255,b);d[idx+3]=255;
+        }
+        wCtx.putImageData(wData,0,0);
       }
-      wCtx.putImageData(wData,0,0);
       ctx.globalAlpha=alpha; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
       ctx.drawImage(wCanvas,0,0,W,H);
       ctx.globalAlpha=1; ctx.imageSmoothingEnabled=false;
@@ -247,6 +251,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     let gridEntryT = -1, phase2StartT = -1;
     let lastMouseT = -99999;
     let curPhase = 0, curAt = 0, curWaveAmp = 0;
+    let cachedGd: CanvasGradient | null = null;
+    let cachedVig: CanvasGradient | null = null;
 
     const reconstruct = (ts: number) => {
       const d = build(W, H); // no curtain: ricostruisce da posizioni normali
@@ -277,6 +283,10 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
+      cachedGd = ctx.createLinearGradient(0, H*0.65, 0, H);
+      cachedGd.addColorStop(0, "rgba(0,0,0,0)"); cachedGd.addColorStop(1, "rgba(11,13,20,1)");
+      cachedVig = ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
+      cachedVig.addColorStop(0,"rgba(0,0,0,0)"); cachedVig.addColorStop(1,"rgba(11,13,20,0.72)");
       sampleLetters(canvas, W, H).then(lp => {
         letterPixels = lp;
         assignPartTargets(parts, lp);
@@ -584,39 +594,73 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           ctx.strokeStyle=`rgba(90,180,255,${(0.10*lv*brightness).toFixed(3)})`;
           ctx.lineWidth=3; ctx.stroke();
 
-          // Per-segment
-          for (const s of segs) {
-            if (!s.on) continue;
-            const pa=pts[s.a],pb=pts[s.b];
-            const h=Math.max(s.ten,(pa.heat+pb.heat)*0.5);
-            let dissolveFade=1;
-            if (inDissolve) {
+          // Per-segment: dissolve usa draw individuale (fade per-seg), normale usa batch per tier
+          if (inDissolve) {
+            for (const s of segs) {
+              if (!s.on) continue;
+              const pa=pts[s.a],pb=pts[s.b];
               const fA=Math.max(0,1-Math.hypot(pa.x-pa.ix,pa.y-pa.iy)/180);
               const fB=Math.max(0,1-Math.hypot(pb.x-pb.ix,pb.y-pb.iy)/180);
-              dissolveFade=fA*fB; if(dissolveFade<0.02) continue;
-            }
-            let effH=h;
-            if (wav>0.01&&waveIntensity>0.01) {
-              const midX=(pa.x+pb.x)*0.5,midY=(pa.y+pb.y)*0.5;
-              const proj=(midX/W)*wDirX+(midY/H)*wDirY;
-              const wv=Math.max(0,Math.sin(proj*Math.PI*5-tAnim*waveSpeed))*wav*waveIntensity*0.55;
-              effH=Math.min(1,h+wv);
-            }
-            let r:number,g:number,b:number;
-            if(effH>0.72){const f=(effH-0.72)/0.28;r=255;g=Math.round(210+(255-210)*f);b=Math.round(255*f);}
-            else if(effH>0.38){const f=(effH-0.38)/0.34;r=230;g=Math.round(40+(210-40)*f);b=0;}
-            else if(effH>0.12){const f=(effH-0.12)/0.26;r=Math.round(90+(230-90)*f);g=Math.round(185*(1-f));b=Math.round(255*(1-f));}
-            else{r=90;g=185;b=255;}
-            const alpha=(0.62+effH*0.34)*dissolveFade*lv*brightness;
-            const lw=0.5+effH*1.9;
-            if(effH>0.45){
+              const dissolveFade=fA*fB; if(dissolveFade<0.02) continue;
+              const h=Math.max(s.ten,(pa.heat+pb.heat)*0.5);
+              let r:number,g:number,b:number;
+              if(h>0.72){const f=(h-0.72)/0.28;r=255;g=Math.round(210+(255-210)*f);b=Math.round(255*f);}
+              else if(h>0.38){const f=(h-0.38)/0.34;r=230;g=Math.round(40+(210-40)*f);b=0;}
+              else if(h>0.12){const f=(h-0.12)/0.26;r=Math.round(90+(230-90)*f);g=Math.round(185*(1-f));b=Math.round(255*(1-f));}
+              else{r=90;g=185;b=255;}
+              const alpha=(0.62+h*0.34)*dissolveFade*lv*brightness;
+              const lw=0.5+h*1.9;
               ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
-              ctx.strokeStyle=`rgba(${r},${g},${b},${(alpha*0.15*dissolveFade).toFixed(3)})`;
-              ctx.lineWidth=lw*4.5;ctx.stroke();
+              ctx.strokeStyle=`rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+              ctx.lineWidth=lw;ctx.stroke();
             }
-            ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);
-            ctx.strokeStyle=`rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-            ctx.lineWidth=lw;ctx.stroke();
+          } else {
+            // Batch per 5 tier di colore — riduce ~6500 draw call a 10
+            // Tier boundaries: 0, 0.12, 0.38, 0.72, 0.85, 1.0
+            const TIERS = [
+              { max:0.12, r:90,  g:185, b:255, lw:0.55,  ba:0.62  },
+              { max:0.38, r:155, g:92,  b:140, lw:0.975, ba:0.705 },
+              { max:0.72, r:230, g:125, b:0,   lw:1.545, ba:0.807 },
+              { max:0.85, r:255, g:225, b:59,  lw:1.99,  ba:0.887 },
+              { max:1.01, r:255, g:248, b:190, lw:2.258, ba:0.934 },
+            ];
+            // Pre-calcola effH per ogni seg
+            const segEffH = new Float32Array(segs.length);
+            for (let si=0;si<segs.length;si++) {
+              const s=segs[si]; if(!s.on){segEffH[si]=-1;continue;}
+              const pa=pts[s.a],pb=pts[s.b];
+              const h=Math.max(s.ten,(pa.heat+pb.heat)*0.5);
+              if (wav>0.01&&waveIntensity>0.01) {
+                const midX=(pa.x+pb.x)*0.5,midY=(pa.y+pb.y)*0.5;
+                const proj=(midX/W)*wDirX+(midY/H)*wDirY;
+                segEffH[si]=Math.min(1,h+Math.max(0,Math.sin(proj*Math.PI*5-tAnim*waveSpeed))*wav*waveIntensity*0.55);
+              } else {
+                segEffH[si]=h;
+              }
+            }
+            // Disegna per tier (5 batched paths invece di ~6500 draw call)
+            const tierMins = [0, 0.12, 0.38, 0.72, 0.85];
+            for (let ti=0;ti<TIERS.length;ti++) {
+              const tier=TIERS[ti], tMin=tierMins[ti], tMax=tier.max;
+              ctx.beginPath();
+              for (let si=0;si<segs.length;si++) {
+                const effH=segEffH[si];
+                if(effH<tMin||effH>=tMax) continue;
+                ctx.moveTo(pts[segs[si].a].x,pts[segs[si].a].y);
+                ctx.lineTo(pts[segs[si].b].x,pts[segs[si].b].y);
+              }
+              ctx.strokeStyle=`rgba(${tier.r},${tier.g},${tier.b},${(tier.ba*lv*brightness).toFixed(3)})`;
+              ctx.lineWidth=tier.lw; ctx.stroke();
+            }
+            // Glow halo solo per seg caldi (effH > 0.45)
+            ctx.beginPath();
+            for (let si=0;si<segs.length;si++) {
+              const effH=segEffH[si]; if(effH<0.45) continue;
+              ctx.moveTo(pts[segs[si].a].x,pts[segs[si].a].y);
+              ctx.lineTo(pts[segs[si].b].x,pts[segs[si].b].y);
+            }
+            ctx.strokeStyle=`rgba(255,140,40,${(0.15*lv*brightness).toFixed(3)})`;
+            ctx.lineWidth=6; ctx.stroke();
           }
 
           // Pin dots + cursore (solo fase 2 non dissolve)
@@ -637,13 +681,9 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         }
       }
 
-      // Gradiente + vignette
-      const gd=ctx.createLinearGradient(0,H*0.65,0,H);
-      gd.addColorStop(0,"rgba(0,0,0,0)");gd.addColorStop(1,"rgba(11,13,20,1)");
-      ctx.fillStyle=gd;ctx.fillRect(0,0,W,H);
-      const vig=ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
-      vig.addColorStop(0,"rgba(0,0,0,0)");vig.addColorStop(1,"rgba(11,13,20,0.72)");
-      ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
+      // Gradiente + vignette (cached — riallocati solo su resize)
+      if (cachedGd) { ctx.fillStyle=cachedGd; ctx.fillRect(0,0,W,H); }
+      if (cachedVig) { ctx.fillStyle=cachedVig; ctx.fillRect(0,0,W,H); }
     }
 
     raf.current = requestAnimationFrame(frame);
