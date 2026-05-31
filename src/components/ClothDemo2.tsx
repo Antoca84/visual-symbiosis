@@ -134,14 +134,16 @@ async function sampleLetters(
     (ox as unknown as Record<string,string>).letterSpacing =
       `${(isNaN(ls) ? fontSize * 0.04 : ls).toFixed(1)}px`;
 
-  // ink_top = h1Rect.top + halfLeading; baseline = ink_top + actualBoundingBoxAscent
-  const inkTop1 = h1Rect.top - cvRect.top + halfLeading;
-  const inkTop2 = inkTop1 + lineH;
-  const asc1 = ox.measureText("Industrial").actualBoundingBoxAscent;
-  const asc2 = ox.measureText("Magic").actualBoundingBoxAscent;
+  // CSS usa lo stesso ascender tipografico per tutte le righe.
+  // Misura su "Hd": capital + lowercase ascender → cattura l'ascender reale del font.
+  // NON usare per-stringa: "Magic" ha solo cap height → baseline troppo alta.
+  const typAscender = ox.measureText("Hd").actualBoundingBoxAscent;
+  const baseline1   = h1Rect.top - cvRect.top + halfLeading + typAscender;
+  const baseline2   = baseline1 + lineH;
+
   ox.fillStyle = "#fff";
-  ox.fillText("Industrial", padLeft, inkTop1 + asc1);
-  ox.fillText("Magic",      padLeft, inkTop2 + asc2);
+  ox.fillText("Industrial", padLeft, baseline1);
+  ox.fillText("Magic",      padLeft, baseline2);
 
   const d = ox.getImageData(0, 0, W, H).data;
   const out: { x: number; y: number }[] = [];
