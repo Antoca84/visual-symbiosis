@@ -343,36 +343,26 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       // ── Dissolve cloth ──────────────────────────────────────────────────
       if (dissolveTriggered) {
         dissolveT += dt;
+        // Impulso una tantum al primo frame — staggered per dissolveDelay
         if (!dissolveExploding) {
+          dissolveExploding = true;
           for (const p of pts) {
             if (p.pinned) continue;
-            if (dissolveT < p.dissolveDelay) {
-              p.x += (Math.sin(p.ix*13.7+dissolveT*4.2)-0.5)*1.2;
-              p.y += (Math.sin(p.iy*19.3+dissolveT*3.8+2.1)-0.5)*1.2;
-            } else {
-              const odx=p.x-dissolveOriginX,ody=p.y-dissolveOriginY;
-              const olen=Math.hypot(odx,ody)+0.5;
-              p.x+=(odx/olen)*0.2; p.y+=(ody/olen)*0.2;
-              p.heat=Math.min(1,p.heat+0.005);
-            }
+            const odx=p.x-dissolveOriginX, ody=p.y-dissolveOriginY;
+            const olen=Math.hypot(odx,ody)+0.5;
+            const str=(0.8+Math.random()*1.0)*(0.4+p.dissolveDelay*1.5);
+            p.px=p.x-(odx/olen)*str;   // velocità outward
+            p.py=p.y-(ody/olen)*str;
+            p.heat=Math.min(1,p.heat+0.3);
           }
         }
+        // Verlet normale + gravity — pezzi cadono naturalmente
         for (const p of pts) {
           if (p.pinned) continue;
-          const vx=(p.x-p.px)*DAMPING,vy=(p.y-p.py)*DAMPING;
-          p.px=p.x; p.py=p.y; p.x+=vx; p.y+=vy; p.heat*=0.985;
+          const vx=(p.x-p.px)*DAMPING, vy=(p.y-p.py)*DAMPING;
+          p.px=p.x; p.py=p.y; p.x+=vx; p.y+=vy+GRAVITY; p.heat*=0.97;
         }
-        if (!dissolveExploding && dissolveT >= 1.4) {
-          dissolveExploding = true;
-        }
-        // Nessuna esplosione — pezzi cadono per gravità aumentata
-        if (dissolveExploding) {
-          for (const p of pts) {
-            if (p.pinned) continue;
-            p.y += GRAVITY * 2.5;
-          }
-        }
-        if (dissolveExploding && dissolveT >= 3.0) reconstruct(lastTs);
+        if (dissolveT >= 2.5) reconstruct(lastTs);
         render(0.055, true, 0.10);
         return;
       }
