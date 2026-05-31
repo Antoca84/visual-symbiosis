@@ -364,16 +364,15 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         }
         if (!dissolveExploding && dissolveT >= 1.4) {
           dissolveExploding = true;
+        }
+        // Nessuna esplosione — pezzi cadono per gravità aumentata
+        if (dissolveExploding) {
           for (const p of pts) {
             if (p.pinned) continue;
-            const odx=p.x-dissolveOriginX,ody=p.y-dissolveOriginY;
-            const olen=Math.hypot(odx,ody)+0.5;
-            const str=1.2+Math.random()*0.8;
-            p.px-=(odx/olen)*str+(Math.random()-0.5)*1.0;
-            p.py-=(ody/olen)*str+(Math.random()-0.5)*1.0;
+            p.y += GRAVITY * 2.5;
           }
         }
-        if (dissolveExploding && dissolveT >= 3.2) reconstruct(lastTs);
+        if (dissolveExploding && dissolveT >= 3.0) reconstruct(lastTs);
         render(0.055, true, 0.10);
         return;
       }
@@ -579,18 +578,18 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             if (!s.on) continue;
             if (inDissolve) {
               const pa=pts[s.a],pb=pts[s.b];
-              const fA=Math.max(0,1-Math.hypot(pa.x-pa.ix,pa.y-pa.iy)/180);
-              const fB=Math.max(0,1-Math.hypot(pb.x-pb.ix,pb.y-pb.iy)/180);
+              const fA=Math.max(0,1-Math.hypot(pa.x-pa.ix,pa.y-pa.iy)/70);
+              const fB=Math.max(0,1-Math.hypot(pb.x-pb.ix,pb.y-pb.iy)/70);
               if (fA*fB<0.02) continue;
             }
             ctx.moveTo(pts[s.a].x,pts[s.a].y); ctx.lineTo(pts[s.b].x,pts[s.b].y);
           }
           const lv = inDissolve ? 1 : lineVis;
-          ctx.strokeStyle=`rgba(60,150,255,${(0.05*lv*brightness).toFixed(3)})`;
+          ctx.strokeStyle=`rgba(60,150,255,${(0.06*lv*brightness).toFixed(3)})`;
           ctx.lineWidth=9; ctx.stroke();
           ctx.beginPath();
           for (const s of segs) { if(!s.on) continue; ctx.moveTo(pts[s.a].x,pts[s.a].y); ctx.lineTo(pts[s.b].x,pts[s.b].y); }
-          ctx.strokeStyle=`rgba(90,180,255,${(0.10*lv*brightness).toFixed(3)})`;
+          ctx.strokeStyle=`rgba(90,180,255,${(0.12*lv*brightness).toFixed(3)})`;
           ctx.lineWidth=3; ctx.stroke();
 
           // Per-segment: dissolve usa draw individuale (fade per-seg), normale usa batch per tier
@@ -598,8 +597,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             for (const s of segs) {
               if (!s.on) continue;
               const pa=pts[s.a],pb=pts[s.b];
-              const fA=Math.max(0,1-Math.hypot(pa.x-pa.ix,pa.y-pa.iy)/180);
-              const fB=Math.max(0,1-Math.hypot(pb.x-pb.ix,pb.y-pb.iy)/180);
+              const fA=Math.max(0,1-Math.hypot(pa.x-pa.ix,pa.y-pa.iy)/70);
+              const fB=Math.max(0,1-Math.hypot(pb.x-pb.ix,pb.y-pb.iy)/70);
               const dissolveFade=fA*fB; if(dissolveFade<0.02) continue;
               const h=Math.max(s.ten,(pa.heat+pb.heat)*0.5);
               let r:number,g:number,b:number;
@@ -617,11 +616,11 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             // Batch per 5 tier di colore — riduce ~6500 draw call a 10
             // Tier boundaries: 0, 0.12, 0.38, 0.72, 0.85, 1.0
             const TIERS = [
-              { max:0.12, r:90,  g:185, b:255, lw:0.55,  ba:0.62  },
-              { max:0.38, r:155, g:92,  b:140, lw:0.975, ba:0.705 },
-              { max:0.72, r:230, g:125, b:0,   lw:1.545, ba:0.807 },
-              { max:0.85, r:255, g:225, b:59,  lw:1.99,  ba:0.887 },
-              { max:1.01, r:255, g:248, b:190, lw:2.258, ba:0.934 },
+              { max:0.12, r:90,  g:185, b:255, lw:0.55,  ba:0.744 },
+              { max:0.38, r:155, g:92,  b:140, lw:0.975, ba:0.846 },
+              { max:0.72, r:230, g:125, b:0,   lw:1.545, ba:0.95  },
+              { max:0.85, r:255, g:225, b:59,  lw:1.99,  ba:0.95  },
+              { max:1.01, r:255, g:248, b:190, lw:2.258, ba:0.95  },
             ];
             // Pre-calcola effH per ogni seg
             const segEffH = new Float32Array(segs.length);
