@@ -75,16 +75,16 @@ interface Pt {
 interface Seg { a: number; b: number; rest: number; on: boolean; ten: number; }
 
 // curtain=true: nodi non-pinnati partono compressi in alto (si srotolano)
-function build(W: number, H: number, curtain = false) {
-  const sx = W / (COLS - 1);
-  const sy = (H * (W < 768 ? 0.42 : 0.65)) / (ROWS - 1);
+function build(W: number, H: number, curtain = false, cols = COLS, rows = ROWS) {
+  const sx = W / (cols - 1);
+  const sy = (H * (W < 768 ? 0.42 : 0.65)) / (rows - 1);
   const oy = H * 0.05;
 
   const pts: Pt[] = [];
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++) {
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
       const gx = c * sx, gy = oy + r * sy;
-      const startY = curtain ? oy : gy; // nodi partono dal pin row → cadono
+      const startY = curtain ? oy : gy;
       pts.push({
         x: gx, y: startY, px: gx, py: startY,
         pinned: r === 0 && c % 3 === 0,
@@ -96,14 +96,14 @@ function build(W: number, H: number, curtain = false) {
   const segs: Seg[] = [];
   const addSeg = (a: number, b: number) => {
     const pa = pts[a], pb = pts[b];
-    const d = Math.hypot(pa.ix - pb.ix, pa.iy - pb.iy); // rest dalla griglia
+    const d = Math.hypot(pa.ix - pb.ix, pa.iy - pb.iy);
     segs.push({ a, b, rest: d, on: true, ten: 0 });
   };
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++) {
-      const i = r * COLS + c;
-      if (c < COLS - 1) addSeg(i, i + 1);
-      if (r < ROWS - 1) addSeg(i, i + COLS);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      if (c < cols - 1) addSeg(i, i + 1);
+      if (r < rows - 1) addSeg(i, i + cols);
     }
 
   return { pts, segs };
@@ -266,15 +266,16 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     let lastResetW = 0, lastResetH = 0;
     let tearMult = TEAR_MULT;
     let interactMult = 1.0;
+    let gCols = COLS, gRows = ROWS;
 
     const reconstruct = (ts: number) => {
-      const d = build(W, H); // no curtain: ricostruisce da posizioni normali
+      const d = build(W, H, false, gCols, gRows);
       pts = d.pts; segs = d.segs;
       // Onda upward
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-        const p = pts[r*COLS+c];
+      for (let r = 0; r < gRows; r++) for (let c = 0; c < gCols; c++) {
+        const p = pts[r*gCols+c];
         if (p.pinned) continue;
-        const upV = 1.5 + (r/(ROWS-1))*10;
+        const upV = 1.5 + (r/(gRows-1))*10;
         p.py = p.y + upV;
         p.px = p.x + (Math.random()-0.5)*1.5;
       }
@@ -287,7 +288,9 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       lastResetW = rW; lastResetH = rH;
       tearMult    = rW < 768 ? TEAR_MULT * 1.4 : TEAR_MULT;
       interactMult = rW < 768 ? 0.45 : 1.0;
-      const d = build(rW, rH, true); pts = d.pts; segs = d.segs;
+      gCols = rW < 768 ? COLS : 66;
+      gRows = rW < 768 ? ROWS : 31;
+      const d = build(rW, rH, true, gCols, gRows); pts = d.pts; segs = d.segs;
       parts = initParticles(rW, rH);
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
