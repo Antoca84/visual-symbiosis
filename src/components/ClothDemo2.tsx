@@ -316,16 +316,19 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     window.addEventListener("mousemove", mm);
     canvas.addEventListener("mousedown", md);
     window.addEventListener("mouseup", mu);
-    canvas.addEventListener("touchmove", e => {
-      const p = getPos(e.touches[0]);
-      mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
-    }, { passive: true });
-    canvas.addEventListener("touchstart", e => {
-      mou.current.down = true;
-      const p = getPos(e.touches[0]);
-      mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
-    }, { passive: true });
-    canvas.addEventListener("touchend", () => { mou.current.down = false; });
+    const isMobile = window.innerWidth < 768;
+    if (!isMobile) {
+      canvas.addEventListener("touchmove", e => {
+        const p = getPos(e.touches[0]);
+        mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
+      }, { passive: true });
+      canvas.addEventListener("touchstart", e => {
+        mou.current.down = true;
+        const p = getPos(e.touches[0]);
+        mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
+      }, { passive: true });
+      canvas.addEventListener("touchend", () => { mou.current.down = false; });
+    }
 
     let lastTs = 0;
 
@@ -799,7 +802,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
   return (
     <>
       <canvas ref={cvs} className="absolute inset-0 w-full h-full block cursor-none"
-        style={{ touchAction: "pan-y" }} />
+        style={{ touchAction: "auto", pointerEvents: window.innerWidth < 768 ? "none" : "auto" }} />
       {showHud && <div className="fixed top-4 right-4 z-[100] pointer-events-auto select-none font-mono">
         <button onClick={() => setHudOpen(v => !v)}
           className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/60
