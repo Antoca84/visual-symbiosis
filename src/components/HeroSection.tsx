@@ -37,7 +37,7 @@ const HeroSection = () => {
           Magic
         </motion.h1>
         <motion.p
-          className="mt-8 text-[11px] tracking-[0.3em] uppercase text-muted-foreground border-l border-foreground/10 pl-4 md:pl-6"
+          className="mt-8 md:mt-20 text-[11px] tracking-[0.3em] uppercase text-muted-foreground border-l border-foreground/10 pl-4 md:pl-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 5.8, ease: "easeOut" }}
