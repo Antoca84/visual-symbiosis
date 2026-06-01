@@ -422,7 +422,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             const localT = Math.max(0, (at - p.delay) / Math.max(0.01, 1 - p.delay));
             if (localT > 0) {
               const { offsetX, offsetY } = hudRef.current;
-              const tx = p.lx + offsetX, ty = p.ly + offsetY;
+              // offsetY calibrato su desktop (md:mt-20) — mobile layout diverso, offset=0
+              const tx = p.lx + offsetX, ty = p.ly + (W >= 768 ? offsetY : 0);
               const dx = tx - p.x, dy = ty - p.y;
               const dist = Math.hypot(dx, dy);
               if (dist < 1.5 && localT > 0.5) {
@@ -736,7 +737,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
         const { offsetX, offsetY } = hudRef.current;
         ctx.fillStyle = "rgba(90,185,255,0.30)";
         for (const lp of letterPixels) {
-          ctx.fillRect(lp.x + offsetX, lp.y + offsetY, 1.5, 1.5);
+          ctx.fillRect(lp.x + offsetX, lp.y + (W >= 768 ? offsetY : 0), 1.5, 1.5);
         }
       }
 
