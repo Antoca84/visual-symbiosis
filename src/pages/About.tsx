@@ -34,28 +34,25 @@ const About = () => {
                   About
                 </motion.p>
                 <p className="font-serif text-2xl md:text-3xl lg:text-4xl text-foreground/80 italic leading-[1.4]">
-                  Industrial Magic is a VFX, CGI, and 3D studio. We create
-                  visual content for cinema, commercial production, and
-                  scientific communication — from fully rendered environments
-                  to product visualization to phenomena made visible
-                  for the first time.
+                  Industrial Magic is a VFX, CGI, and 3D studio creating
+                  visuals for film, advertising, and scientific communication —
+                  from photoreal environments and product imagery to simulations
+                  of phenomena beyond the reach of a camera.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  We work with directors who need a shot that doesn't exist yet.
-                  With researchers who need their data to become something
-                  people can actually see. With brands who need a visual
-                  identity that doesn't look like everyone else's.
+                  We work with filmmakers, researchers, and brands to turn
+                  ideas, data, and imagination into compelling visual experiences.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  Every project — regardless of scale — gets the same level
-                  of craft. We work across cinematic VFX pipelines, 3D
-                  workflows, and scientific visualization. We don't have
-                  a good enough mode.
+                  Our expertise spans cinematic VFX, procedural workflows,
+                  and scientific visualization. Every project is approached
+                  with the same standards of precision, regardless of scope
+                  or budget.
                 </p>
                 <p className="font-serif text-xl md:text-2xl text-foreground/50 italic leading-[1.5]">
-                  High-end visual production has historically required
-                  high-end budgets. We built this studio to challenge that.
-                  The craft stays. The ceiling moves.
+                  Exceptional visual work shouldn't be reserved for exceptional
+                  budgets. We built Industrial Magic to make world-class
+                  craftsmanship more accessible without lowering the standard.
                 </p>
               </div>
             </ScrollReveal>
