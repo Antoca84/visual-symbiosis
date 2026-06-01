@@ -77,7 +77,7 @@ interface Seg { a: number; b: number; rest: number; on: boolean; ten: number; }
 // curtain=true: nodi non-pinnati partono compressi in alto (si srotolano)
 function build(W: number, H: number, curtain = false) {
   const sx = W / (COLS - 1);
-  const sy = (H * 0.65) / (ROWS - 1);
+  const sy = (H * (W < 768 ? 0.42 : 0.65)) / (ROWS - 1);
   const oy = H * 0.05;
 
   const pts: Pt[] = [];
@@ -293,7 +293,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
-      cachedGd = ctx.createLinearGradient(0, H*0.65, 0, H);
+      const clothBot = H * (W < 768 ? 0.42 : 0.65);
+      cachedGd = ctx.createLinearGradient(0, clothBot, 0, H);
       cachedGd.addColorStop(0, "rgba(0,0,0,0)"); cachedGd.addColorStop(1, "rgba(11,13,20,1)");
       cachedVig = ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
       cachedVig.addColorStop(0,"rgba(0,0,0,0)"); cachedVig.addColorStop(1,"rgba(11,13,20,0.72)");
@@ -316,19 +317,16 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     window.addEventListener("mousemove", mm);
     canvas.addEventListener("mousedown", md);
     window.addEventListener("mouseup", mu);
-    const isMobile = window.innerWidth < 768;
-    if (!isMobile) {
-      canvas.addEventListener("touchmove", e => {
-        const p = getPos(e.touches[0]);
-        mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
-      }, { passive: true });
-      canvas.addEventListener("touchstart", e => {
-        mou.current.down = true;
-        const p = getPos(e.touches[0]);
-        mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
-      }, { passive: true });
-      canvas.addEventListener("touchend", () => { mou.current.down = false; });
-    }
+    canvas.addEventListener("touchmove", e => {
+      const p = getPos(e.touches[0]);
+      mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
+    }, { passive: true });
+    canvas.addEventListener("touchstart", e => {
+      mou.current.down = true;
+      const p = getPos(e.touches[0]);
+      mou.current.x = p.x; mou.current.y = p.y; lastMouseT = performance.now();
+    }, { passive: true });
+    canvas.addEventListener("touchend", () => { mou.current.down = false; });
 
     let lastTs = 0;
 
@@ -802,7 +800,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
   return (
     <>
       <canvas ref={cvs} className="absolute inset-0 w-full h-full block cursor-none"
-        style={{ touchAction: "auto", pointerEvents: window.innerWidth < 768 ? "none" : "auto" }} />
+        style={{ touchAction: "pan-y", pointerEvents: "auto" }} />
       {showHud && <div className="fixed top-4 right-4 z-[100] pointer-events-auto select-none font-mono">
         <button onClick={() => setHudOpen(v => !v)}
           className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/60
