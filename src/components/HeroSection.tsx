@@ -42,8 +42,6 @@ const HeroSection = () => {
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 5.8, ease: "easeOut" }}
         >
-          VFX, CGI, and 3D at the intersection of technical precision
-          and artistic vision.{" "}
           <span
             className="font-bold"
             style={{
