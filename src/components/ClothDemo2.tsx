@@ -200,17 +200,26 @@ function SliderRow({ label, value, min, max, step, onChange, unit = "" }: {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
+export function ClothDemo2({ showHud = true, showControls = false }: { showHud?: boolean; showControls?: boolean } = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
   const mou = useRef({ x: -9999, y: -9999, down: false });
   const raf = useRef<number>(0);
-  const showHudRef = useRef(showHud);
+  const showHudRef  = useRef(showHud);
+  const pausedRef   = useRef(false);
+  const resetRef    = useRef(false);
+  const [paused, setPaused] = useState(false);
   const [hudOpen, setHudOpen] = useState(false);
   const [hud, setHud]         = useState<HudVals>(loadHud);
   const hudRef                = useRef<HudVals>(hud);
   useEffect(() => { hudRef.current = hud; }, [hud]);
   const updateHud = (k: keyof HudVals, v: number) => setHud(p => ({ ...p, [k]: v }));
   const saveHud   = () => localStorage.setItem(HUD_KEY, JSON.stringify(hudRef.current));
+
+  const togglePause = () => {
+    pausedRef.current = !pausedRef.current;
+    setPaused(p => !p);
+  };
+  const triggerReset = () => { resetRef.current = true; };
 
   useEffect(() => {
     const canvas = cvs.current!;
@@ -347,6 +356,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
 
     function frame(ts: number) {
       raf.current = requestAnimationFrame(frame);
+      if (resetRef.current) { resetRef.current = false; reconstruct(ts); return; }
+      if (pausedRef.current) return;
       if (t0 === null) t0 = ts;
       const dt = Math.min((ts - lastTs) / 1000, 0.05);
       lastTs = ts; tAnim += 0.011;
@@ -859,6 +870,29 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           </div>
         )}
       </div>}
+      {showControls && (
+        <div className="absolute top-4 right-4 z-20 flex gap-2 pointer-events-auto select-none font-mono">
+          <button
+            onClick={triggerReset}
+            className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/70
+              border border-white/10 hover:border-white/25 px-4 py-2.5 backdrop-blur-sm
+              bg-black/20 hover:bg-black/40 transition-colors min-h-[40px]"
+          >
+            Reset
+          </button>
+          <button
+            onClick={togglePause}
+            className={`text-[9px] tracking-[0.3em] uppercase border px-4 py-2.5 backdrop-blur-sm
+              transition-colors min-h-[40px]
+              ${paused
+                ? "text-white/70 border-white/30 bg-black/40 hover:text-white hover:border-white/50"
+                : "text-white/30 border-white/10 bg-black/20 hover:text-white/70 hover:border-white/25"
+              }`}
+          >
+            {paused ? "▶ Play" : "⏸ Pause"}
+          </button>
+        </div>
+      )}
     </>
   );
 }

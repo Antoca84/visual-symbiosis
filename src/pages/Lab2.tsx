@@ -6,7 +6,7 @@ const Lab2 = () => (
   <main className="bg-[#0b0d14] min-h-screen">
     <Navigation />
     <section className="relative h-svh md:h-screen w-full overflow-hidden flex items-center md:items-end md:pb-24">
-      <ClothDemo2 />
+      <ClothDemo2 showControls={true} />
 
       <div className="relative z-10 px-6 md:px-12 w-full pointer-events-none">
         <div className="border-l border-white/40 pl-4 md:pl-6 inline-block mb-3 md:mb-4">
