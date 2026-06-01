@@ -42,8 +42,8 @@ interface Part {
   delay: number; // stagger 0–0.40
 }
 
-function initParticles(W: number, H: number): Part[] {
-  return Array.from({ length: N_PART }, () => {
+function initParticles(W: number, H: number, n = N_PART): Part[] {
+  return Array.from({ length: n }, () => {
     const x = Math.random() * W, y = Math.random() * H;
     return { x, y, ox: x, oy: y, vx: (Math.random()-0.5)*0.8, vy: (Math.random()-0.5)*0.8,
       lx: 0, ly: 0, ld: Infinity, delay: Math.random() * 0.40 };
@@ -292,7 +292,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       gCols = rW < 768 ? COLS : 66;
       gRows = rW < 768 ? ROWS : 31;
       const d = build(rW, rH, true, gCols, gRows); pts = d.pts; segs = d.segs;
-      parts = initParticles(rW, rH);
+      parts = initParticles(rW, rH, rW < 768 ? 1000 : N_PART);
       t0 = null; lettersReady = false; letterPixels = [];
       dissolveTriggered = false; dissolveExploding = false;
       dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
@@ -596,8 +596,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             }
             void trailLen;
 
-            // Glow halo bianco (anello esterno) — visibile anche in fase float
-            if (particleGlow > 0.01) {
+            // Glow halo bianco (anello esterno) — skip su mobile (perf)
+            if (particleGlow > 0.01 && W >= 768) {
               const glowR = 3.5 + converge * 5.5;
               const glowA = Math.min(0.9, baseA * 0.55 * particleGlow);
               ctx.beginPath(); ctx.arc(p.x, p.y, glowR, 0, Math.PI*2);
