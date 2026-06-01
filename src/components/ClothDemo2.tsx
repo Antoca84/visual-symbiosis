@@ -296,7 +296,7 @@ export function ClothDemo2({ showHud = true, showControls = false }: { showHud?:
 
     const doFullReset = (rW: number, rH: number) => {
       lastResetW = rW; lastResetH = rH;
-      tearMult    = rW < 768 ? TEAR_MULT * 1.4 : TEAR_MULT;
+      tearMult    = rW < 768 ? TEAR_MULT * 1.15 : TEAR_MULT;
       interactMult = rW < 768 ? 0.45 : 1.0;
       gCols = rW < 768 ? COLS : 66;
       gRows = rW < 768 ? ROWS : 31;
@@ -520,7 +520,7 @@ export function ClothDemo2({ showHud = true, showControls = false }: { showHud?:
         // Dissolve trigger
         let broken=0;
         for (const s of segs) if (!s.on) broken++;
-        if (broken/segs.length>=0.65) {
+        if (broken/segs.length>=0.55) {
           dissolveTriggered=true; dissolveT=0; dissolveExploding=false;
           // Origine random del sweep radiale
           dissolveOriginX = W * (0.2 + Math.random() * 0.6);
