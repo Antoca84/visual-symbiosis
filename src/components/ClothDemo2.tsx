@@ -263,6 +263,9 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
     let curPhase = 0, curAt = 0, curWaveAmp = 0;
     let cachedGd: CanvasGradient | null = null;
     let cachedVig: CanvasGradient | null = null;
+    let lastResetW = 0, lastResetH = 0;
+    let tearMult = TEAR_MULT;
+    let interactMult = 1.0;
 
     const reconstruct = (ts: number) => {
       const d = build(W, H); // no curtain: ricostruisce da posizioni normali
@@ -280,29 +283,37 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
       t0 = ts - (T_CLOUD + T_LETTER) * 1000; // salta intro → fase 2 diretto
     };
 
+    const doFullReset = (rW: number, rH: number) => {
+      lastResetW = rW; lastResetH = rH;
+      tearMult    = rW < 768 ? TEAR_MULT * 1.4 : TEAR_MULT;
+      interactMult = rW < 768 ? 0.45 : 1.0;
+      const d = build(rW, rH, true); pts = d.pts; segs = d.segs;
+      parts = initParticles(rW, rH);
+      t0 = null; lettersReady = false; letterPixels = [];
+      dissolveTriggered = false; dissolveExploding = false;
+      dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
+      sampleLetters(canvas, rW, rH).then(lp => {
+        letterPixels = lp;
+        assignPartTargets(parts, lp);
+        lettersReady = true;
+      });
+    };
+
     const resize = () => {
       W = canvas.offsetWidth; H = canvas.offsetHeight;
       mouseR = W < 768 ? MOUSE_R * 0.5 : MOUSE_R;
       const dpr = Math.min(devicePixelRatio||1, 2);
       canvas.width = W*dpr; canvas.height = H*dpr;
       ctx.setTransform(dpr,0,0,dpr,0,0);
-      // Cloth: curtain (nodi compressi in alto, si srotolano in fase 2)
-      const d = build(W, H, true); pts = d.pts; segs = d.segs;
-      // Particle cloud: scatter iniziale
-      parts = initParticles(W, H);
-      t0 = null; lettersReady = false; letterPixels = [];
-      dissolveTriggered = false; dissolveExploding = false;
-      dissolveT = 0; gridEntryT = -1; phase2StartT = -1;
       const clothBot = H * (W < 768 ? 0.42 : 0.65);
       cachedGd = ctx.createLinearGradient(0, clothBot, 0, H);
       cachedGd.addColorStop(0, "rgba(0,0,0,0)"); cachedGd.addColorStop(1, "rgba(11,13,20,1)");
       cachedVig = ctx.createRadialGradient(W*.5,H*.5,W*.18,W*.5,H*.5,W*.82);
       cachedVig.addColorStop(0,"rgba(0,0,0,0)"); cachedVig.addColorStop(1,"rgba(11,13,20,0.72)");
-      sampleLetters(canvas, W, H).then(lp => {
-        letterPixels = lp;
-        assignPartTargets(parts, lp);
-        lettersReady = true;
-      });
+      // Full reset solo per major resize (prima volta, orientamento, viewport grande)
+      // Skip per minor resize: iOS address bar show/hide cambia H di ~56-80px
+      const major = lastResetW === 0 || Math.abs(W - lastResetW) > 80 || Math.abs(H - lastResetH) > 150;
+      if (major) doFullReset(W, H);
     };
     resize();
     window.addEventListener("resize", resize);
@@ -366,7 +377,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
             const pa=pts[s.a],pb=pts[s.b];
             const ddx=pa.x-pb.x,ddy=pa.y-pb.y;
             const dist=Math.sqrt(ddx*ddx+ddy*ddy)||0.001;
-            if (dist>s.rest*TEAR_MULT){s.on=false;continue;}
+            if (dist>s.rest*tearMult){s.on=false;continue;}
             const diff=(dist-s.rest)/dist*0.5;
             const ox=ddx*diff,oy=ddy*diff;
             if(!pa.pinned){pa.x-=ox;pa.y-=oy;}
@@ -444,8 +455,8 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           const md2=Math.sqrt(ddx*ddx+ddy*ddy);
           if (md2 < mouseR) {
             const prox=1-md2/mouseR;
-            if (down) { p.x+=(mx-p.x)*prox*0.75; p.y+=(my-p.y)*prox*0.75; }
-            else { const inv=1/(md2||0.001); p.x+=ddx*inv*prox*1.8; p.y+=ddy*inv*prox*1.8; }
+            if (down) { p.x+=(mx-p.x)*prox*0.75*interactMult; p.y+=(my-p.y)*prox*0.75*interactMult; }
+            else { const inv=1/(md2||0.001); p.x+=ddx*inv*prox*1.8*interactMult; p.y+=ddy*inv*prox*1.8*interactMult; }
             p.heat=Math.min(1,p.heat+prox*0.12);
           } else { p.heat*=0.94; }
         }
@@ -455,7 +466,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
           if (!s.on) continue;
           const pa=pts[s.a],pb=pts[s.b];
           const dist=Math.hypot(pa.x-pb.x,pa.y-pb.y);
-          const tear=s.rest*TEAR_MULT;
+          const tear=s.rest*tearMult;
           s.ten=Math.max(0,Math.min(1,(dist-s.rest)/(tear-s.rest)));
           if (dist>tear) { s.on=false; continue; }
           if (down) {
@@ -472,7 +483,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
               const pa=pts[s.a],pb=pts[s.b];
               const ddx=pa.x-pb.x,ddy=pa.y-pb.y;
               const dist=Math.sqrt(ddx*ddx+ddy*ddy)||0.001;
-              const tear=s.rest*TEAR_MULT;
+              const tear=s.rest*tearMult;
               s.ten=Math.max(0,Math.min(1,(dist-s.rest)/(tear-s.rest)));
               if (dist>tear&&constraintRamp>0.8){s.on=false;continue;}
               const diff=(dist-s.rest)/dist*0.5*constraintRamp;
