@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const COLS = 40;
 const ROWS = 28;
@@ -52,10 +52,16 @@ function init(W: number, H: number): { points: Point[]; constraints: Constraint[
   return { points, constraints };
 }
 
-export function ClothDemo() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouseRef  = useRef({ x: -9999, y: -9999, down: false });
-  const rafRef    = useRef<number>(0);
+export function ClothDemo({ showControls = false }: { showControls?: boolean } = {}) {
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const mouseRef   = useRef({ x: -9999, y: -9999, down: false });
+  const rafRef     = useRef<number>(0);
+  const pausedRef  = useRef(false);
+  const resetRef   = useRef(false);
+  const [paused, setPaused] = useState(false);
+
+  const togglePause = () => { pausedRef.current = !pausedRef.current; setPaused(p => !p); };
+  const triggerReset = () => { resetRef.current = true; };
 
   useEffect(() => {
     const canvas = canvasRef.current!;
@@ -100,6 +106,8 @@ export function ClothDemo() {
 
     function draw() {
       rafRef.current = requestAnimationFrame(draw);
+      if (resetRef.current) { resetRef.current = false; const d = init(W, H); pts = d.points; cs = d.constraints; }
+      if (pausedRef.current) return;
       const { x: mx, y: my, down } = mouseRef.current;
 
       // ── Physics ──────────────────────────────────────────────────────────────
@@ -206,10 +214,35 @@ export function ClothDemo() {
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full h-full block cursor-crosshair"
-      style={{ touchAction: "none" }}
-    />
+    <div className="w-full h-full relative">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full block cursor-crosshair"
+        style={{ touchAction: "none" }}
+      />
+      {showControls && (
+        <div className="absolute top-4 right-4 z-20 flex gap-2 pointer-events-auto select-none font-mono">
+          <button
+            onClick={triggerReset}
+            className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/70
+              border border-white/10 hover:border-white/25 px-4 py-2.5 backdrop-blur-sm
+              bg-black/20 hover:bg-black/40 transition-colors min-h-[40px]"
+          >
+            Reset
+          </button>
+          <button
+            onClick={togglePause}
+            className={`text-[9px] tracking-[0.3em] uppercase border px-4 py-2.5 backdrop-blur-sm
+              transition-colors min-h-[40px]
+              ${paused
+                ? "text-white/70 border-white/30 bg-black/40 hover:text-white hover:border-white/50"
+                : "text-white/30 border-white/10 bg-black/20 hover:text-white/70 hover:border-white/25"
+              }`}
+          >
+            {paused ? "▶ Play" : "⏸ Pause"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

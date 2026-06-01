@@ -8,7 +8,7 @@ const Lab = () => (
     <div className="absolute top-4 right-6 z-10 font-mono text-[10px] tracking-[0.2em] text-white/15">
       drag to tear · hover to perturb
     </div>
-    <ClothDemo />
+    <ClothDemo showControls={true} />
   </main>
 );
 
