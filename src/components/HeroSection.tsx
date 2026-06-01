@@ -43,7 +43,18 @@ const HeroSection = () => {
           transition={{ duration: 1, delay: 5.8, ease: "easeOut" }}
         >
           VFX, CGI, and 3D at the intersection of technical precision
-          and artistic vision. We make the extraordinary, for everyone.
+          and artistic vision.{" "}
+          <span
+            className="font-bold"
+            style={{
+              background: "linear-gradient(90deg, #5ab9ff 0%, #9b5c8c 30%, #e67d00 68%, #fff8be 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            We make the extraordinary, for everyone.
+          </span>
         </motion.p>
       </div>
     </section>
