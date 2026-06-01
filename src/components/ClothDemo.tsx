@@ -221,12 +221,12 @@ export function ClothDemo({ showControls = false }: { showControls?: boolean } =
         style={{ touchAction: "none" }}
       />
       {showControls && (
-        <div className="absolute top-4 right-4 z-20 flex gap-2 pointer-events-auto select-none font-mono">
+        <div className="absolute top-14 right-4 z-20 flex gap-2 pointer-events-auto select-none font-mono">
           <button
             onClick={triggerReset}
-            className="text-[9px] tracking-[0.3em] uppercase text-white/30 hover:text-white/70
-              border border-white/10 hover:border-white/25 px-4 py-2.5 backdrop-blur-sm
-              bg-black/20 hover:bg-black/40 transition-colors min-h-[40px]"
+            className="text-[9px] tracking-[0.3em] uppercase text-white/55 hover:text-white/90
+              border border-white/20 hover:border-white/40 px-4 py-2.5 backdrop-blur-sm
+              bg-black/30 hover:bg-black/50 transition-colors min-h-[40px]"
           >
             Reset
           </button>
@@ -235,8 +235,8 @@ export function ClothDemo({ showControls = false }: { showControls?: boolean } =
             className={`text-[9px] tracking-[0.3em] uppercase border px-4 py-2.5 backdrop-blur-sm
               transition-colors min-h-[40px]
               ${paused
-                ? "text-white/70 border-white/30 bg-black/40 hover:text-white hover:border-white/50"
-                : "text-white/30 border-white/10 bg-black/20 hover:text-white/70 hover:border-white/25"
+                ? "text-white/90 border-white/45 bg-black/50 hover:text-white hover:border-white/65"
+                : "text-white/55 border-white/20 bg-black/30 hover:text-white/90 hover:border-white/40"
               }`}
           >
             {paused ? "▶ Play" : "⏸ Pause"}
