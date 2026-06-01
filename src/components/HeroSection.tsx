@@ -17,7 +17,7 @@ const HeroSection = () => {
       ref={sectionRef}
       className="relative h-svh md:h-screen w-full overflow-hidden flex items-center md:items-end md:pb-24"
     >
-      <ClothDemo2 showHud={false} />
+      <ClothDemo2 showHud={window.location.hostname === "localhost"} />
 
       <div className="relative z-10 px-6 md:px-12 w-full pointer-events-none">
         <div className="border-l border-foreground/20 pl-4 md:pl-6 inline-block mb-3 md:mb-4">

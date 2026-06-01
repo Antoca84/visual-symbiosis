@@ -204,6 +204,7 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
   const cvs = useRef<HTMLCanvasElement>(null);
   const mou = useRef({ x: -9999, y: -9999, down: false });
   const raf = useRef<number>(0);
+  const showHudRef = useRef(showHud);
   const [hudOpen, setHudOpen] = useState(false);
   const [hud, setHud]         = useState<HudVals>(loadHud);
   const hudRef                = useRef<HudVals>(hud);
@@ -727,6 +728,15 @@ export function ClothDemo2({ showHud = true }: { showHud?: boolean } = {}) {
               ctx.fillStyle="rgba(255,255,255,0.85)";ctx.fill();
             }
           }
+        }
+      }
+
+      // Ghost letter pixels (solo HUD attivo — debug per centratura offset)
+      if (showHudRef.current && letterPixels.length > 0) {
+        const { offsetX, offsetY } = hudRef.current;
+        ctx.fillStyle = "rgba(90,185,255,0.30)";
+        for (const lp of letterPixels) {
+          ctx.fillRect(lp.x + offsetX, lp.y + offsetY, 1.5, 1.5);
         }
       }
 
