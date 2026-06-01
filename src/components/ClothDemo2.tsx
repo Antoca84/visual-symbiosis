@@ -171,7 +171,7 @@ async function sampleLetters(
 // ── HUD ───────────────────────────────────────────────────────────────────────
 const HUD_KEY = "lab2-hud-v6";
 interface HudVals { waveIntensity: number; waveSpeed: number; waveAngle: number; brightness: number; particleGlow: number; trailAlpha: number; trailMult: number; offsetX: number; offsetY: number; }
-const HUD_DEF: HudVals = { waveIntensity: 0.35, waveSpeed: 2.2, waveAngle: 0, brightness: 1.0, particleGlow: 1.0, trailAlpha: 0.6, trailMult: 2.5, offsetX: 0, offsetY: 0 };
+const HUD_DEF: HudVals = { waveIntensity: 0.62, waveSpeed: 2.35, waveAngle: 28, brightness: 1.22, particleGlow: 1.00, trailAlpha: 0.60, trailMult: 4.50, offsetX: 0, offsetY: 15 };
 function loadHud(): HudVals {
   try { const s = localStorage.getItem(HUD_KEY); return s ? { ...HUD_DEF, ...JSON.parse(s) } : HUD_DEF; }
   catch { return HUD_DEF; }
